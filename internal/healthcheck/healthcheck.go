@@ -1,13 +1,13 @@
-// internal/healthcheck/healthcheck.go
 package healthcheck
 
 import (
 	"context"
 	"fmt"
 	"log"
-	"net"
+	"sync"
 	"time"
 
+	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/process"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
@@ -15,19 +15,22 @@ import (
 
 // Checker выполняет периодическую проверку здоровья Ruby GRPC серверов.
 type Checker struct {
-	pm          *process.Manager
-	interval    time.Duration
+	pm           *process.Manager
+	interval     time.Duration
+	host         string                        // Added host
 	serverStates map[string]connectivity.State // Состояние серверов
-	stopChan    chan struct{}                  // Канал для остановки healthcheck
+	stopChan     chan struct{}                 // Канал для остановки healthcheck
+	mu           sync.RWMutex                  // Add a read-write mutex
 }
 
 // NewChecker создает новый экземпляр Health Checker.
-func NewChecker(pm *process.Manager, interval time.Duration) *Checker {
+func NewChecker(pm *process.Manager, cfg *config.Config) *Checker { // Modified to accept config
 	return &Checker{
-		pm:          pm,
-		interval:    interval,
+		pm:           pm,
+		interval:     cfg.HealthCheckInterval,
+		host:         cfg.Host, // Assign the host
 		serverStates: make(map[string]connectivity.State),
-		stopChan:    make(chan struct{}),
+		stopChan:     make(chan struct{}),
 	}
 }
 
@@ -63,7 +66,7 @@ func (c *Checker) checkAll() {
 
 // checkServer проверяет состояние одного Ruby GRPC сервера.
 func (c *Checker) checkServer(server process.Server) {
-	address := fmt.Sprintf("%s:%d", server.Host, server.Port)
+	address := fmt.Sprintf("%s:%d", c.host, server.Port) // Use c.host
 
 	// 1. Проверяем, запущен ли процесс
 	if !c.pm.IsRunning(server.Name) {
@@ -103,12 +106,18 @@ func (c *Checker) checkServer(server process.Server) {
 
 // updateServerState обновляет состояние сервера в map.
 func (c *Checker) updateServerState(serverName string, state connectivity.State) {
-	// TODO: Use a mutex to protect the serverStates map
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.serverStates[serverName] = state
 }
 
 // GetServerState возвращает состояние сервера.
 func (c *Checker) GetServerState(serverName string) connectivity.State {
-	// TODO: Use a mutex to protect the serverStates map
-	return c.serverStates[serverName]
+	c.mu.RLock() // Use RLock for read access
+	defer c.mu.RUnlock()
+	state, ok := c.serverStates[serverName]
+	if !ok {
+		return connectivity.Shutdown // Or another appropriate default
+	}
+	return state
 }

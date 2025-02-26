@@ -4,6 +4,7 @@ package process
 import (
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -23,17 +24,20 @@ type Manager struct {
 type Server struct {
 	Name    string
 	Command []string
+	Port    int // Added Port
 	process *exec.Cmd
 }
 
 // NewManager создает новый экземпляр Process Manager.
-func NewManager(serverConfigs []config.RubyServer) (*Manager, error) {
-	servers := make([]Server, len(serverConfigs))
-	for i, cfg := range serverConfigs {
+func NewManager(cfg *config.Config) (*Manager, error) {
+	servers := make([]Server, cfg.Workers.Count)
+	for i := range cfg.Workers.Count {
+		port := cfg.Workers.StartPort + i
 		servers[i] = Server{
-			Name:    cfg.Name,
-			Command: cfg.Command,
-			process: nil, // Пока процесс не запущен
+			Name:    fmt.Sprintf("worker-%d", i+1), // Unique name
+			Command: cfg.Workers.Command,
+			Port:    port, // Assign the port
+			process: nil,  // Пока процесс не запущен
 		}
 	}
 	return &Manager{servers: servers}, nil
@@ -59,13 +63,14 @@ func (m *Manager) startServer(server *Server) error {
 	}
 
 	cmd := exec.Command(server.Command[0], server.Command[1:]...)
+	cmd.Env = append(os.Environ(), fmt.Sprintf("PORT=%d", server.Port)) // Add PORT env variable
 	server.process = cmd
 
 	// Перенаправляем вывод процесса в лог
 	cmd.Stdout = log.Writer()
 	cmd.Stderr = log.Writer()
 
-	log.Printf("Starting server %s with command: %v", server.Name, server.Command)
+	log.Printf("Starting server %s on port %d with command: %v", server.Name, server.Port, server.Command) // Added port logging
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start server %s: %w", server.Name, err)
 	}
@@ -175,6 +180,8 @@ func (m *Manager) GetServers() []Server {
 	defer m.mu.Unlock()
 
 	serversCopy := make([]Server, len(m.servers))
-	copy(serversCopy, m.servers)
+	for i := range m.servers {
+		serversCopy[i] = m.servers[i]
+	}
 	return serversCopy
 }

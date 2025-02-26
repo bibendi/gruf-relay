@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/config"
+	"github.com/bibendi/gruf-relay/internal/healthcheck"
 	"github.com/bibendi/gruf-relay/internal/process"
-	// "github.com/bibendi/gruf-relay/internal/healthcheck"
 	// "github.com/bibendi/gruf-relay/internal/loadbalance"
 	// "github.com/bibendi/gruf-relay/internal/proxy"
 )
@@ -27,7 +27,7 @@ func main() {
 	log.Printf("Configuration loaded: %+v", cfg) // Выводим конфигурацию для отладки
 
 	// 2. Инициализация Process Manager
-	pm, err := process.NewManager(cfg.RubyServers)
+	pm, err := process.NewManager(cfg)
 	if err != nil {
 		log.Fatalf("Failed to initialize process manager: %v", err)
 	}
@@ -39,13 +39,13 @@ func main() {
 	}
 	log.Println("Ruby servers started")
 
-	// // 4. Инициализация Health Checker
-	// hc := healthcheck.NewChecker(pm, cfg.HealthCheckInterval)
-	// log.Println("Health checker initialized")
+	// 4. Инициализация Health Checker
+	hc := healthcheck.NewChecker(pm, cfg)
+	log.Println("Health checker initialized")
 
-	// // 5. Запуск Health Checker
-	// hc.Start()
-	// log.Println("Health checker started")
+	// 5. Запуск Health Checker
+	hc.Start()
+	log.Println("Health checker started")
 
 	// // 6. Инициализация Load Balancer
 	// lb := loadbalance.NewRoundRobin(pm) // Можно выбрать другой алгоритм
@@ -76,8 +76,8 @@ func main() {
 	// grpcServerCancel()          // Signal the GRPC server to stop
 	time.Sleep(shutdownTimeout) // Give the server time to shutdown
 
-	// log.Println("Stopping health checker...")
-	// hc.Stop()
+	log.Println("Stopping health checker...")
+	hc.Stop()
 
 	log.Println("Stopping ruby servers...")
 	if err := pm.StopAll(); err != nil {

@@ -1,11 +1,5 @@
-proxy_port: 8080
-health_check_interval: 5s
-ruby_servers:
-  - name: server1
-    host: localhost
-    port: 50051
-    command: ["ruby", "gruf_server.rb"]
-  - name: server2
-    host: localhost
-    port: 50052
-    command: ["ruby", "gruf_server.rb"]
+port: 8080
+health_check_interval: 1s
+workers:
+  command: ["ruby", "gruf_server.rb"]
+  count: 2

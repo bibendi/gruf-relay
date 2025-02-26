@@ -11,17 +11,17 @@ import (
 
 // Config представляет структуру конфигурации приложения.
 type Config struct {
-	ProxyPort           int           `yaml:"proxy_port"`
+	Host              string        `yaml:"host"`
+	Port              int           `yaml:"port"`
 	HealthCheckInterval time.Duration `yaml:"health_check_interval"`
-	RubyServers         []RubyServer  `yaml:"ruby_servers"`
+	Workers           WorkersConfig `yaml:"workers"`
 }
 
-// RubyServer представляет конфигурацию одного Ruby GRPC сервера.
-type RubyServer struct {
-	Name    string   `yaml:"name"`
-	Host    string   `yaml:"host"`
-	Port    int      `yaml:"port"`
-	Command []string `yaml:"command"`
+// WorkersConfig представляет конфигурацию воркеров (Ruby серверов).
+type WorkersConfig struct {
+	Command   []string `yaml:"command"`
+	Count     int      `yaml:"count"`
+	StartPort int      `yaml:"start_port"`
 }
 
 // LoadConfig загружает конфигурацию из YAML файла.
@@ -34,6 +34,7 @@ func LoadConfig(filename string) (*Config, error) {
 
 	// 2. Разбор YAML
 	var config Config
+	config.setDefaultValues()
 	err = yaml.Unmarshal(yamlFile, &config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
@@ -47,33 +48,46 @@ func LoadConfig(filename string) (*Config, error) {
 	return &config, nil
 }
 
+// setDefaultValues устанавливает значения по умолчанию для конфигурации.
+func (c *Config) setDefaultValues() {
+	if c.Host == "" {
+		c.Host = "0.0.0.0"
+	}
+	if c.Port == 0 {
+		c.Port = 8080
+	}
+	if c.HealthCheckInterval == 0 {
+		c.HealthCheckInterval = 5 * time.Second
+	}
+	if c.Workers.Count == 0 {
+		c.Workers.Count = 2
+	}
+	if c.Workers.StartPort == 0 {
+		c.Workers.StartPort = 9000
+	}
+	// Workers.Command не имеет значения по умолчанию, так как это обязательное поле
+}
+
 // validateConfig выполняет валидацию конфигурации.
 func validateConfig(cfg *Config) error {
-	if cfg.ProxyPort <= 0 {
-		return fmt.Errorf("proxy_port must be a positive integer")
+	if cfg.Port <= 0 {
+		return fmt.Errorf("port must be a positive integer")
 	}
 
 	if cfg.HealthCheckInterval <= 0 {
 		return fmt.Errorf("health_check_interval must be a positive duration")
 	}
 
-	if len(cfg.RubyServers) == 0 {
-		return fmt.Errorf("at least one ruby_server must be defined")
+	if len(cfg.Workers.Command) == 0 {
+		return fmt.Errorf("workers command cannot be empty")
 	}
 
-	for _, server := range cfg.RubyServers {
-		if server.Name == "" {
-			return fmt.Errorf("ruby_server name cannot be empty")
-		}
-		if server.Host == "" {
-			return fmt.Errorf("ruby_server host cannot be empty")
-		}
-		if server.Port <= 0 {
-			return fmt.Errorf("ruby_server port must be a positive integer")
-		}
-		if len(server.Command) == 0 {
-			return fmt.Errorf("ruby_server command cannot be empty")
-		}
+	if cfg.Workers.Count <= 0 {
+		return fmt.Errorf("workers count must be a positive integer")
+	}
+
+	if cfg.Workers.StartPort <= 0 {
+		return fmt.Errorf("workers start_port must be a positive integer")
 	}
 
 	return nil
