@@ -1,3 +1,4 @@
+// internal/healthcheck/healthcheck.go
 package healthcheck
 
 import (
@@ -36,6 +37,12 @@ func NewChecker(pm *process.Manager, cfg *config.Config) *Checker { // Modified 
 
 // Start запускает Health Checker.
 func (c *Checker) Start() {
+	go c.run() // Launch the run method in a goroutine
+	log.Println("Health checker started")
+}
+
+// run contains the main health check loop.
+func (c *Checker) run() {
 	ticker := time.NewTicker(c.interval)
 	defer ticker.Stop()
 

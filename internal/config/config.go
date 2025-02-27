@@ -11,17 +11,16 @@ import (
 
 // Config представляет структуру конфигурации приложения.
 type Config struct {
-	Host              string        `yaml:"host"`
-	Port              int           `yaml:"port"`
+	Host                string        `yaml:"host"`
+	Port                int           `yaml:"port"`
 	HealthCheckInterval time.Duration `yaml:"health_check_interval"`
-	Workers           WorkersConfig `yaml:"workers"`
+	Workers             WorkersConfig `yaml:"workers"`
 }
 
 // WorkersConfig представляет конфигурацию воркеров (Ruby серверов).
 type WorkersConfig struct {
-	Command   []string `yaml:"command"`
-	Count     int      `yaml:"count"`
-	StartPort int      `yaml:"start_port"`
+	Count     int `yaml:"count"`
+	StartPort int `yaml:"start_port"`
 }
 
 // LoadConfig загружает конфигурацию из YAML файла.
@@ -65,7 +64,6 @@ func (c *Config) setDefaultValues() {
 	if c.Workers.StartPort == 0 {
 		c.Workers.StartPort = 9000
 	}
-	// Workers.Command не имеет значения по умолчанию, так как это обязательное поле
 }
 
 // validateConfig выполняет валидацию конфигурации.
@@ -76,10 +74,6 @@ func validateConfig(cfg *Config) error {
 
 	if cfg.HealthCheckInterval <= 0 {
 		return fmt.Errorf("health_check_interval must be a positive duration")
-	}
-
-	if len(cfg.Workers.Command) == 0 {
-		return fmt.Errorf("workers command cannot be empty")
 	}
 
 	if cfg.Workers.Count <= 0 {

@@ -35,7 +35,7 @@ func NewManager(cfg *config.Config) (*Manager, error) {
 		port := cfg.Workers.StartPort + i
 		servers[i] = Server{
 			Name:    fmt.Sprintf("worker-%d", i+1), // Unique name
-			Command: cfg.Workers.Command,
+			Command: []string{"bundle", "exec", "gruf", "--host", fmt.Sprintf("0.0.0.0:%d", port), "--health-check"},
 			Port:    port, // Assign the port
 			process: nil,  // Пока процесс не запущен
 		}

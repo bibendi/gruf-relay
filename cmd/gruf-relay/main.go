@@ -20,11 +20,11 @@ func main() {
 	log.Println("Starting Gruf Relay...")
 
 	// 1. Загрузка конфигурации
-	cfg, err := config.LoadConfig("config.yaml") // Или из переменных окружения
+	cfg, err := config.LoadConfig("config/gruf-relay.yml")
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
-	log.Printf("Configuration loaded: %+v", cfg) // Выводим конфигурацию для отладки
+	log.Printf("Configuration loaded: %+v", cfg)
 
 	// 2. Инициализация Process Manager
 	pm, err := process.NewManager(cfg)
