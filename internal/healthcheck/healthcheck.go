@@ -94,7 +94,7 @@ func (c *Checker) checkServer(server process.Server) {
 	// 3. Проверяем состояние соединения
 	state := conn.GetState()
 	c.updateServerState(server.Name, state)
-	log.Printf("Server %s state: %s", server.Name, state)
+	// log.Printf("Server %s state: %s", server.Name, state)
 
 	// 4. Если соединение не готово, ждем изменения состояния
 	if state != connectivity.Ready {

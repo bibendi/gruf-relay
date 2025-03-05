@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package demo;
+
+service Jobs {
+    rpc GetJob(GetJobReq) returns (GetJobResp) { }
+}
+
+message GetJobReq {
+    uint64 id = 1;
+}
+
+message GetJobResp {
+    uint64 id = 1;
+    string name = 2;
+}

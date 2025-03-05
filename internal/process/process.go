@@ -2,6 +2,7 @@
 package process
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -35,7 +36,7 @@ func NewManager(cfg *config.Config) (*Manager, error) {
 		port := cfg.Workers.StartPort + i
 		servers[i] = Server{
 			Name:    fmt.Sprintf("worker-%d", i+1), // Unique name
-			Command: []string{"bundle", "exec", "gruf", "--host", fmt.Sprintf("0.0.0.0:%d", port), "--health-check"},
+			Command: []string{"bundle", "exec", "gruf", "--host", fmt.Sprintf("0.0.0.0:%d", port), "--health-check", "--backtrace-on-error"},
 			Port:    port, // Assign the port
 			process: nil,  // Пока процесс не запущен
 		}
@@ -63,6 +64,9 @@ func (m *Manager) startServer(server *Server) error {
 	}
 
 	cmd := exec.Command(server.Command[0], server.Command[1:]...)
+	if errors.Is(cmd.Err, exec.ErrDot) {
+		cmd.Err = nil
+	}
 	cmd.Env = append(os.Environ(), fmt.Sprintf("PORT=%d", server.Port)) // Add PORT env variable
 	server.process = cmd
 
