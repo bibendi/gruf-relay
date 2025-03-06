@@ -184,8 +184,6 @@ func (m *Manager) GetServers() []Server {
 	defer m.mu.Unlock()
 
 	serversCopy := make([]Server, len(m.servers))
-	for i := range m.servers {
-		serversCopy[i] = m.servers[i]
-	}
+	copy(serversCopy, m.servers)
 	return serversCopy
 }

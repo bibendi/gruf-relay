@@ -12,6 +12,7 @@ import (
 	"github.com/bibendi/gruf-relay/internal/process"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1" // Импорт protobuf для health check
 )
 
 // Checker выполняет периодическую проверку здоровья Ruby GRPC серверов.
@@ -41,7 +42,7 @@ func (c *Checker) Start() {
 	log.Println("Health checker started")
 }
 
-// run contains the main health check loop.
+// run содержит основную логику проверки здоровья в цикле.
 func (c *Checker) run() {
 	ticker := time.NewTicker(c.interval)
 	defer ticker.Stop()
@@ -71,9 +72,9 @@ func (c *Checker) checkAll() {
 	}
 }
 
-// checkServer проверяет состояние одного Ruby GRPC сервера.
+// checkServer проверяет состояние одного Ruby GRPC сервера с использованием GRPC health check.
 func (c *Checker) checkServer(server process.Server) {
-	address := fmt.Sprintf("%s:%d", c.host, server.Port) // Use c.host
+	address := fmt.Sprintf("%s:%d", c.host, server.Port)
 
 	// 1. Проверяем, запущен ли процесс
 	if !c.pm.IsRunning(server.Name) {
@@ -91,24 +92,32 @@ func (c *Checker) checkServer(server process.Server) {
 	}
 	defer conn.Close()
 
-	// 3. Проверяем состояние соединения
-	state := conn.GetState()
-	c.updateServerState(server.Name, state)
-	// log.Printf("Server %s state: %s", server.Name, state)
-
-	// 4. Если соединение не готово, ждем изменения состояния
-	if state != connectivity.Ready {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second) // Reduced timeout
+	// 3. Выполняем GRPC health check
+	client := healthpb.NewHealthClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		if !conn.WaitForStateChange(ctx, state) {
-			log.Printf("Server %s did not become ready in time", server.Name)
+
+	req := &healthpb.HealthCheckRequest{} // Пустой запрос, так как проверяем общий статус сервера
+	resp, err := client.Check(ctx, req)
+	if err != nil {
 			c.updateServerState(server.Name, connectivity.TransientFailure)
-		} else {
-			newState := conn.GetState()
-			c.updateServerState(server.Name, newState)
-			log.Printf("Server %s state changed to: %s", server.Name, newState)
+		log.Printf("Health check failed for server %s: %v, state: %s", server.Name, err, connectivity.TransientFailure)
+		return
 		}
+
+	// 4. Интерпретируем результат health check
+	var state connectivity.State
+	switch resp.Status {
+	case healthpb.HealthCheckResponse_SERVING:
+		state = connectivity.Ready
+	case healthpb.HealthCheckResponse_NOT_SERVING:
+		state = connectivity.TransientFailure
+	default:
+		state = connectivity.TransientFailure // Или другое подходящее состояние для UNKNOWN
 	}
+
+	c.updateServerState(server.Name, state)
+	log.Printf("Server %s health check status: %s, state: %s", server.Name, resp.Status, state)
 }
 
 // updateServerState обновляет состояние сервера в map.
