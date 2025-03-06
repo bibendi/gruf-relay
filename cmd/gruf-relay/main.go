@@ -9,8 +9,8 @@ import (
 
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/healthcheck"
+	"github.com/bibendi/gruf-relay/internal/loadbalance"
 	"github.com/bibendi/gruf-relay/internal/process"
-	// "github.com/bibendi/gruf-relay/internal/loadbalance"
 	// "github.com/bibendi/gruf-relay/internal/proxy"
 )
 
@@ -47,9 +47,9 @@ func main() {
 	hc.Start()
 	log.Println("Health checker started")
 
-	// // 6. Инициализация Load Balancer
-	// lb := loadbalance.NewRoundRobin(pm) // Можно выбрать другой алгоритм
-	// log.Println("Load balancer initialized (Round Robin)")
+	// 6. Инициализация Load Balancer
+	lb := loadbalance.NewRoundRobin(pm) // Можно выбрать другой алгоритм
+	log.Println("Load balancer initialized (Round Robin), %v", lb)
 
 	// // 7. Инициализация GRPC Proxy Server
 	// grpcProxy := proxy.NewGRPCProxyServer(lb)

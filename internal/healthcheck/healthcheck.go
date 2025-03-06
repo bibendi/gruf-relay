@@ -77,7 +77,7 @@ func (c *Checker) checkServer(server process.Server) {
 	address := fmt.Sprintf("%s:%d", c.host, server.Port)
 
 	// 1. Проверяем, запущен ли процесс
-	if !c.pm.IsRunning(server.Name) {
+	if !c.pm.IsServerRunning(server.Name) {
 		c.updateServerState(server.Name, connectivity.Shutdown)
 		log.Printf("Server %s is not running, state: %s", server.Name, connectivity.Shutdown)
 		return
