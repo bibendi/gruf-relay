@@ -18,8 +18,8 @@ import (
 // Manager управляет жизненным циклом Ruby GRPC серверов.
 type Manager struct {
 	servers   []Server
-	mu        sync.Mutex // Защита от гонок при доступе к servers
-	Processes []*Process // Слайс для хранения информации о запущенных процессах. Добавлено!
+	mu        sync.Mutex          // Защита от гонок при доступе к servers
+	Processes map[string]*Process // Слайс для хранения информации о запущенных процессах. Добавлено!
 }
 
 // Server представляет собой конфигурацию Ruby GRPC сервера (то, как мы его запускаем)
@@ -40,7 +40,7 @@ type Process struct { // Переименовано из SingleProcess в Proces
 
 // NewManager создает новый экземпляр Process Manager.
 func NewManager(cfg *config.Config) (*Manager, error) {
-	processes := make([]*Process, cfg.Workers.Count)
+	processes := make(map[string]*Process, cfg.Workers.Count)
 	servers := make([]Server, cfg.Workers.Count)
 	// Use a loop with index to correctly initialize the slices
 	for i := 0; i < cfg.Workers.Count; i++ { // Corrected loop condition
@@ -51,12 +51,14 @@ func NewManager(cfg *config.Config) (*Manager, error) {
 			Command: []string{"bundle", "exec", "gruf", "--host", fmt.Sprintf("0.0.0.0:%d", port), "--health-check", "--backtrace-on-error"},
 			Port:    port, // Assign the port
 		}
-		processes[i] = &Process{
+
+		process := &Process{
 			Name:    name,
 			Port:    port,
 			cmd:     nil,
 			running: false,
 		}
+		processes[name] = process
 	}
 	return &Manager{servers: servers, Processes: processes}, nil
 }
@@ -66,9 +68,9 @@ func (m *Manager) StartAll() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for i := range m.Processes {
-		if err := m.startProcess(m.Processes[i], m.servers[i]); err != nil {
-			return fmt.Errorf("failed to start server %s: %w", m.Processes[i].Name, err)
+	for i, server := range m.servers {
+		if err := m.startProcess(m.Processes[server.Name], m.servers[i]); err != nil {
+			return fmt.Errorf("failed to start server %s: %w", server.Name, err)
 		}
 	}
 	return nil
@@ -122,9 +124,9 @@ func (m *Manager) StopAll() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for i := range m.Processes {
-		if err := m.stopProcess(m.Processes[i]); err != nil {
-			log.Printf("failed to stop server %s: %v", m.Processes[i].Name, err) // Log the error instead of returning
+	for _, process := range m.Processes {
+		if err := m.stopProcess(process); err != nil {
+			log.Printf("failed to stop server %s: %v", process.Name, err) // Log the error instead of returning
 		}
 	}
 	return nil
@@ -214,10 +216,10 @@ func (m *Manager) IsServerRunning(serverName string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for _, process := range m.Processes {
-		if process.Name == serverName && process.IsRunning() {
-			return true
-		}
+	process, ok := m.Processes[serverName]
+	if !ok {
+		return false
 	}
-	return false
+
+	return process.IsRunning()
 }

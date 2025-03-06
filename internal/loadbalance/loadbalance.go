@@ -14,18 +14,18 @@ type Balancer interface {
 
 // RoundRobin реализует алгоритм Round Robin.
 type RoundRobin struct {
-	processes []*process.Process
-	mu        sync.Mutex
-	nextIndex int
+	processes      map[string]*process.Process
+	mu             sync.Mutex
+	nextIndex      int
 	processManager *process.Manager // Добавлено для получения списка процессов и проверки их состояния
 }
 
 // NewRoundRobin создает новый RoundRobin balancer.
 func NewRoundRobin(pm *process.Manager) *RoundRobin {
 	return &RoundRobin{
-		processes: pm.Processes, // Инициализируем слайс процессов из менеджера процессов
-        processManager: pm,
-		nextIndex: 0,
+		processes:      pm.Processes,
+		processManager: pm,
+		nextIndex:      0,
 	}
 }
 
