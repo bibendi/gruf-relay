@@ -12,7 +12,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bibendi/gruf-relay/internal/codec"
 	"github.com/bibendi/gruf-relay/internal/config"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // Manager управляет жизненным циклом Ruby GRPC серверов.
@@ -36,6 +39,7 @@ type Process struct { // Переименовано из SingleProcess в Proces
 	cmd     *exec.Cmd
 	mu      sync.Mutex
 	running bool
+	Client  *grpc.ClientConn
 }
 
 // NewManager создает новый экземпляр Process Manager.
@@ -56,6 +60,7 @@ func NewManager(cfg *config.Config) (*Manager, error) {
 			Name:    name,
 			Port:    port,
 			cmd:     nil,
+			Client:  nil,
 			running: false,
 		}
 		processes[name] = process
@@ -116,6 +121,13 @@ func (m *Manager) startProcess(process *Process, server Server) error {
 		process.mu.Unlock()
 	}()
 
+	// Установление gRPC коннекта
+	client, err := grpc.NewClient(fmt.Sprintf("0.0.0.0:%d", server.Port), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithCodec(codec.Codec()))
+	if err != nil {
+		log.Fatalf("Failed connect to backend: %v", err)
+	}
+	process.Client = client
+
 	return nil
 }
 
@@ -142,6 +154,11 @@ func (m *Manager) stopProcess(process *Process) error {
 	}
 
 	log.Printf("Stopping server %s", process.Name)
+
+	if process.Client != nil {
+		log.Printf("Closing client connection on %s", process.Name)
+		process.Client.Close()
+	}
 
 	// Проверяем, жив ли еще процесс
 	if process.cmd.ProcessState != nil && process.cmd.ProcessState.Exited() {

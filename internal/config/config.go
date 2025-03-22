@@ -11,8 +11,8 @@ import (
 
 // Config представляет структуру конфигурации приложения.
 type Config struct {
-	Host                string        `yaml:"host"`
-	Port                int           `yaml:"port"`
+	Host                string        `yaml:"host" env-default:"0.0.0.0"`
+	Port                int           `yaml:"port" env-default:"8080"`
 	HealthCheckInterval time.Duration `yaml:"health_check_interval"`
 	Workers             WorkersConfig `yaml:"workers"`
 }
@@ -49,12 +49,12 @@ func LoadConfig(filename string) (*Config, error) {
 
 // setDefaultValues устанавливает значения по умолчанию для конфигурации.
 func (c *Config) setDefaultValues() {
-	if c.Host == "" {
-		c.Host = "0.0.0.0"
-	}
-	if c.Port == 0 {
-		c.Port = 8080
-	}
+	// if c.Host == "" {
+	// 	c.Host = "0.0.0.0"
+	// }
+	// if c.Port == 0 {
+	// 	c.Port = 8080
+	// }
 	if c.HealthCheckInterval == 0 {
 		c.HealthCheckInterval = 5 * time.Second
 	}

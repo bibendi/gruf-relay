@@ -5,17 +5,19 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/bibendi/gruf-relay/internal/config"
-	"github.com/bibendi/gruf-relay/internal/healthcheck"
 	"github.com/bibendi/gruf-relay/internal/loadbalance"
 	"github.com/bibendi/gruf-relay/internal/process"
-	// "github.com/bibendi/gruf-relay/internal/proxy"
+	"github.com/bibendi/gruf-relay/internal/proxy"
+	"github.com/bibendi/gruf-relay/internal/server"
 )
 
-const shutdownTimeout = 3 * time.Second // Время на завершение работы
-
+// TODO:
+// - Поддержка TLS
+// - Метрики
+// - Coverage
+// - Testify
 func main() {
 	log.Println("Starting Gruf Relay...")
 
@@ -40,49 +42,40 @@ func main() {
 	log.Println("Ruby servers started")
 
 	// 4. Инициализация Health Checker
-	hc := healthcheck.NewChecker(pm, cfg)
+	//hc := healthcheck.NewChecker(pm, cfg)
 	log.Println("Health checker initialized")
 
 	// 5. Запуск Health Checker
-	hc.Start()
+	//hc.Start()
 	log.Println("Health checker started")
 
 	// 6. Инициализация Load Balancer
 	lb := loadbalance.NewRoundRobin(pm) // Можно выбрать другой алгоритм
-	log.Println("Load balancer initialized (Round Robin), %v", lb)
+	log.Printf("Load balancer initialized (Round Robin), %v", lb)
 
-	// // 7. Инициализация GRPC Proxy Server
-	// grpcProxy := proxy.NewGRPCProxyServer(lb)
-	// log.Println("GRPC proxy server initialized")
+	// 7. Инициализация GRPC Proxy
+	grpcProxy := proxy.NewProxy(lb)
+	log.Println("GRPC proxy initialized")
 
-	// // 8. Запуск GRPC сервера
-	// grpcServerCtx, grpcServerCancel := context.WithCancel(context.Background())
-	// go func() {
-	// 	log.Printf("Starting GRPC server on port %d", cfg.ProxyPort)
-	// 	if err := proxy.StartGRPCServer(grpcServerCtx, cfg.ProxyPort, grpcProxy); err != nil {
-	// 		log.Fatalf("Failed to start GRPC server: %v", err)
-	// 	}
-	// 	log.Println("GRPC server stopped") // This will be printed when the GRPC server exits
-	// }()
+	// 8. Создание GRPC сервера
+	grpcServer := server.NewServer(cfg, grpcProxy)
+	grpcServer.Start()
+	log.Println("GRPC server started")
 
-	// 9. Обработка сигналов завершения (Ctrl+C)
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	log.Println("Shutdown signal received...")
+	// 11. Graceful shutdown
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
 
-	// // 10. Graceful shutdown
-	// log.Println("Shutting down GRPC server...")
-	// grpcServerCancel()          // Signal the GRPC server to stop
-	time.Sleep(shutdownTimeout) // Give the server time to shutdown
+	<-signalCh
+	log.Println("Received termination signal, initiating graceful shutdown...")
 
-	log.Println("Stopping health checker...")
-	hc.Stop()
+	// 12. Остановка GRPC сервера
+	grpcServer.Stop()
 
-	log.Println("Stopping ruby servers...")
+	// 13. Остановка процессов
 	if err := pm.StopAll(); err != nil {
 		log.Printf("Error stopping ruby servers: %v", err) // Use Printf instead of Fatalf
 	}
 
-	log.Println("Gruf Relay stopped")
+	log.Println("Goodbye")
 }

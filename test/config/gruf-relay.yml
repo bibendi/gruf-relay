@@ -1,5 +1,5 @@
 host: 0.0.0.0
 port: 8080
-health_check_interval: 1s
+health_check_interval: 5s
 workers:
   count: 2
