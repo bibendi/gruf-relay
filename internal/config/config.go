@@ -1,4 +1,3 @@
-// internal/config/config.go
 package config
 
 import (
@@ -9,7 +8,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// Config представляет структуру конфигурации приложения.
 type Config struct {
 	Host                string        `yaml:"host" env-default:"0.0.0.0"`
 	Port                int           `yaml:"port" env-default:"8080"`
@@ -17,21 +15,17 @@ type Config struct {
 	Workers             WorkersConfig `yaml:"workers"`
 }
 
-// WorkersConfig представляет конфигурацию воркеров (Ruby серверов).
 type WorkersConfig struct {
-	Count     int `yaml:"count"`
-	StartPort int `yaml:"start_port"`
+	Count     int `yaml:"count" env-default:"2"`
+	StartPort int `yaml:"start_port" env-default:"9000"`
 }
 
-// LoadConfig загружает конфигурацию из YAML файла.
 func LoadConfig(filename string) (*Config, error) {
-	// 1. Чтение файла
 	yamlFile, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	// 2. Разбор YAML
 	var config Config
 	config.setDefaultValues()
 	err = yaml.Unmarshal(yamlFile, &config)
@@ -39,7 +33,6 @@ func LoadConfig(filename string) (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	// 3. Валидация конфигурации (опционально, но рекомендуется)
 	if err := validateConfig(&config); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
@@ -47,14 +40,7 @@ func LoadConfig(filename string) (*Config, error) {
 	return &config, nil
 }
 
-// setDefaultValues устанавливает значения по умолчанию для конфигурации.
 func (c *Config) setDefaultValues() {
-	// if c.Host == "" {
-	// 	c.Host = "0.0.0.0"
-	// }
-	// if c.Port == 0 {
-	// 	c.Port = 8080
-	// }
 	if c.HealthCheckInterval == 0 {
 		c.HealthCheckInterval = 5 * time.Second
 	}
@@ -66,7 +52,6 @@ func (c *Config) setDefaultValues() {
 	}
 }
 
-// validateConfig выполняет валидацию конфигурации.
 func validateConfig(cfg *Config) error {
 	if cfg.Port <= 0 {
 		return fmt.Errorf("port must be a positive integer")

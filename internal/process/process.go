@@ -101,7 +101,7 @@ func (m *Manager) startProcess(process *Process, server Server) error {
 
 	process.running = true
 
-	// Горутина для ожидания завершения процесса
+	// Goroutine to wait for the process to complete
 	// TODO: restart process
 	go func() {
 		err := cmd.Wait()
@@ -119,7 +119,7 @@ func (m *Manager) startProcess(process *Process, server Server) error {
 		process.mu.Unlock()
 	}()
 
-	// Установление gRPC коннекта
+	// Establishing gRPC connection
 	client, err := grpc.NewClient(fmt.Sprintf("0.0.0.0:%d", server.Port), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithCodec(codec.Codec()))
 	if err != nil {
 		log.Fatalf("Failed connect to backend: %v", err)
@@ -166,18 +166,18 @@ func (m *Manager) stopProcess(process *Process) error {
 		}
 	}
 
-	// Проверяем, жив ли еще процесс
+	// Check if the process is still alive
 	if process.cmd.ProcessState != nil && process.cmd.ProcessState.Exited() {
 		log.Printf("Server %s already exited, skipping stop", process.Name)
 		process.running = false
 		process.cmd = nil
-		return nil // Процесс уже завершен, ничего не делаем
+		return nil // Process has already completed, do nothing
 	}
 
-	// Отправляем SIGTERM
+	// Send SIGTERM
 	if err := process.cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		log.Printf("Failed to send SIGTERM to server %s: %v", process.Name, err)
-		// Если не удалось отправить SIGTERM, отправляем SIGKILL
+		// If sending SIGTERM fails, send SIGKILL
 		if err := process.cmd.Process.Kill(); err != nil {
 			return fmt.Errorf("failed to kill server %s: %w", process.Name, err)
 		}
@@ -192,7 +192,7 @@ func (m *Manager) stopProcess(process *Process) error {
 	select {
 	case err := <-waitChan:
 		if err != nil {
-			// Игнорируем ошибку wait: no child processes
+			// Ignore "wait: no child processes" error
 			if !strings.Contains(err.Error(), "no child processes") {
 				log.Printf("Server %s exited with error: %v", process.Name, err)
 				return err

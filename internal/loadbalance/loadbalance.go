@@ -1,4 +1,3 @@
-// internal/loadbalance/loadbalance.go
 package loadbalance
 
 import (
@@ -7,20 +6,17 @@ import (
 	"github.com/bibendi/gruf-relay/internal/process"
 )
 
-// Balancer определяет интерфейс для алгоритмов балансировки нагрузки.
 type Balancer interface {
-	Next() *process.Process // Выбирает следующий доступный процесс.  Возвращает nil, если нет доступных процессов.
+	Next() *process.Process
 }
 
-// RoundRobin реализует алгоритм Round Robin.
 type RoundRobin struct {
 	processes      map[string]*process.Process
 	mu             sync.Mutex
 	nextIndex      int
-	processManager *process.Manager // Добавлено для получения списка процессов и проверки их состояния
+	processManager *process.Manager
 }
 
-// NewRoundRobin создает новый RoundRobin balancer.
 func NewRoundRobin(pm *process.Manager) *RoundRobin {
 	return &RoundRobin{
 		processes:      pm.Processes,
@@ -29,15 +25,13 @@ func NewRoundRobin(pm *process.Manager) *RoundRobin {
 	}
 }
 
-// Next выбирает следующий процесс, используя алгоритм Round Robin.
-// Возвращает nil, если нет доступных процессов.
 func (rr *RoundRobin) Next() *process.Process {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
 
-	availableProcesses := rr.getAvailableProcesses() // Фильтруем только доступные процессы
+	availableProcesses := rr.getAvailableProcesses()
 	if len(availableProcesses) == 0 {
-		return nil // Нет доступных процессов
+		return nil
 	}
 
 	index := rr.nextIndex % len(availableProcesses)
@@ -47,12 +41,10 @@ func (rr *RoundRobin) Next() *process.Process {
 	return proc
 }
 
-// getAvailableProcesses возвращает слайс процессов, которые считаются "доступными".
-// Сейчас это просто означает, что процесс запущен.
 func (rr *RoundRobin) getAvailableProcesses() []*process.Process {
 	available := []*process.Process{}
 	for _, p := range rr.processManager.Processes {
-		if p.IsRunning() { // Используем метод IsRunning, чтобы проверить состояние процесса
+		if p.IsRunning() {
 			available = append(available, p)
 		}
 	}
