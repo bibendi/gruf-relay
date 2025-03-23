@@ -66,18 +66,29 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 	upstreamErrChan := proxyRequest(upstream, downstream)
 	downstreamErrChan := proxyResponse(downstream, upstream)
 
-	for range 2 {
+	for {
 		select {
-		case upstreamErr := <-upstreamErrChan:
+		case upstreamErr, ok := <-upstreamErrChan:
+			if !ok {
+				upstreamErr = nil
+				continue
+			}
+
 			if upstreamErr == io.EOF {
 				downstream.CloseSend()
 			} else {
 				return status.Errorf(codes.Internal, "failed proxying request: %v", upstreamErr)
 			}
-		case downstreamErr := <-downstreamErrChan:
+		case downstreamErr, ok := <-downstreamErrChan:
+			if !ok {
+				downstreamErr = nil
+				continue
+			}
+
 			upstream.SetTrailer(downstream.Trailer())
 
 			if downstreamErr == io.EOF {
+				log.Printf("Finish proxying %s to %s", fullMethod, process.Name)
 				return nil
 			} else {
 				log.Printf("failed proxying response: %v", downstreamErr)
@@ -85,14 +96,14 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 			}
 		}
 	}
-
-	return status.Errorf(codes.Internal, "something went wrong in the handling of streams")
 }
 
 func proxyRequest(src grpc.ServerStream, dst grpc.ClientStream) chan error {
 	errChan := make(chan error, 1)
 
 	go func() {
+		defer close(errChan)
+
 		var msg emptypb.Empty
 
 		for {
@@ -117,6 +128,8 @@ func proxyResponse(src grpc.ClientStream, dst grpc.ServerStream) chan error {
 	errChan := make(chan error, 1)
 
 	go func() {
+		defer close(errChan)
+
 		var msg emptypb.Empty
 
 		// Receive the first message to ensure the connection is established

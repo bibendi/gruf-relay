@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-logger = Rails.logger
+logger = Logger.new($stdout)
 
 require_relative "../../pkg/server/jobs_pb"
 require_relative "../../pkg/server/jobs_services_pb"

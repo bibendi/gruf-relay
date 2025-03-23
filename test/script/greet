@@ -1,0 +1,8 @@
+#!/bin/bash
+
+PROTO_FILE="proto/greet.proto"
+
+exec grpcurl \
+  -plaintext \
+  --proto "$PROTO_FILE" \
+  0.0.0.0:8080 greet.Greeter/SayHello
