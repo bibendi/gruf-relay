@@ -64,7 +64,7 @@ func main() {
 
 	// 11. Graceful shutdown
 	signalCh := make(chan os.Signal, 1)
-	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	<-signalCh
 	log.Println("Received termination signal, initiating graceful shutdown...")
@@ -74,7 +74,7 @@ func main() {
 
 	// 13. Остановка процессов
 	if err := pm.StopAll(); err != nil {
-		log.Printf("Error stopping ruby servers: %v", err) // Use Printf instead of Fatalf
+		log.Printf("Error stopping ruby servers: %v", err)
 	}
 
 	log.Println("Goodbye")

@@ -18,31 +18,28 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// Manager управляет жизненным циклом Ruby GRPC серверов.
 type Manager struct {
 	servers   []Server
-	mu        sync.Mutex          // Защита от гонок при доступе к servers
-	Processes map[string]*Process // Слайс для хранения информации о запущенных процессах. Добавлено!
+	mu        sync.Mutex
+	Processes map[string]*Process
 }
 
-// Server представляет собой конфигурацию Ruby GRPC сервера (то, как мы его запускаем)
 type Server struct {
 	Name    string
 	Command []string
-	Port    int // Added Port
+	Port    int
 }
 
-// Process представляет собой запущенный процесс Ruby GRPC сервера.
-type Process struct { // Переименовано из SingleProcess в Process
-	Name    string
-	Port    int // Added Port
-	cmd     *exec.Cmd
-	mu      sync.Mutex
-	running bool
-	Client  *grpc.ClientConn
+type Process struct {
+	Name     string
+	Port     int
+	cmd      *exec.Cmd
+	mu       sync.Mutex
+	running  bool
+	stopping bool
+	Client   *grpc.ClientConn
 }
 
-// NewManager создает новый экземпляр Process Manager.
 func NewManager(cfg *config.Config) (*Manager, error) {
 	processes := make(map[string]*Process, cfg.Workers.Count)
 	servers := make([]Server, cfg.Workers.Count)
@@ -51,9 +48,9 @@ func NewManager(cfg *config.Config) (*Manager, error) {
 		port := cfg.Workers.StartPort + i
 		name := fmt.Sprintf("worker-%d", i+1)
 		servers[i] = Server{
-			Name:    name, // Unique name
+			Name:    name,
 			Command: []string{"bundle", "exec", "gruf", "--host", fmt.Sprintf("0.0.0.0:%d", port), "--health-check", "--backtrace-on-error"},
-			Port:    port, // Assign the port
+			Port:    port,
 		}
 
 		process := &Process{
@@ -68,7 +65,6 @@ func NewManager(cfg *config.Config) (*Manager, error) {
 	return &Manager{servers: servers, Processes: processes}, nil
 }
 
-// StartAll запускает все Ruby GRPC серверы.
 func (m *Manager) StartAll() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -81,7 +77,6 @@ func (m *Manager) StartAll() error {
 	return nil
 }
 
-// startProcess запускает один Ruby GRPC сервер.
 func (m *Manager) startProcess(process *Process, server Server) error {
 	process.mu.Lock()
 	defer process.mu.Unlock()
@@ -94,30 +89,33 @@ func (m *Manager) startProcess(process *Process, server Server) error {
 	if errors.Is(cmd.Err, exec.ErrDot) {
 		cmd.Err = nil
 	}
-	cmd.Env = append(os.Environ(), fmt.Sprintf("PORT=%d", server.Port)) // Add PORT env variable
+	cmd.Env = append(os.Environ(), fmt.Sprintf("PORT=%d", server.Port))
 	process.cmd = cmd
-	// Перенаправляем вывод процесса в лог
 	cmd.Stdout = log.Writer()
 	cmd.Stderr = log.Writer()
 
-	log.Printf("Starting server %s on port %d with command: %v", process.Name, server.Port, server.Command) // Added port logging
+	log.Printf("Starting server %s on port %d with command: %v", process.Name, server.Port, server.Command)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start server %s: %w", process.Name, err)
 	}
 
-	process.running = true // устанавливаем флаг running в true
+	process.running = true
 
 	// Горутина для ожидания завершения процесса
+	// TODO: restart process
 	go func() {
 		err := cmd.Wait()
+		if process.stopping {
+			return
+		}
 		if err != nil {
-			log.Printf("Server %s exited with error: %v", process.Name, err)
+			log.Printf("Server %s exited unexpectedly with error: %v", process.Name, err)
 		} else {
 			log.Printf("Server %s exited normally", process.Name)
 		}
 		process.mu.Lock()
-		process.running = false // устанавливаем флаг running в false при завершении
-		process.cmd = nil       // Сбрасываем process после завершения
+		process.running = false
+		process.cmd = nil
 		process.mu.Unlock()
 	}()
 
@@ -131,33 +129,41 @@ func (m *Manager) startProcess(process *Process, server Server) error {
 	return nil
 }
 
-// StopAll останавливает все Ruby GRPC серверы.
 func (m *Manager) StopAll() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	for _, process := range m.Processes {
 		if err := m.stopProcess(process); err != nil {
-			log.Printf("failed to stop server %s: %v", process.Name, err) // Log the error instead of returning
+			log.Printf("failed to stop server %s: %v", process.Name, err)
 		}
 	}
 	return nil
 }
 
-// stopProcess останавливает один Ruby GRPC сервер.
 func (m *Manager) stopProcess(process *Process) error {
 	process.mu.Lock()
 	defer process.mu.Unlock()
 
 	if !process.running {
-		return nil // Процесс не начинался, ничего не делаем
+		return nil
 	}
+
+	if process.stopping {
+		return fmt.Errorf("server %s is already stopping", process.Name)
+	}
+	process.stopping = true
+	defer func() {
+		process.stopping = false
+	}()
 
 	log.Printf("Stopping server %s", process.Name)
 
 	if process.Client != nil {
 		log.Printf("Closing client connection on %s", process.Name)
-		process.Client.Close()
+		if err := process.Client.Close(); err != nil {
+			log.Printf("failed closing client connection on %s: %v", process.Name, err)
+		}
 	}
 
 	// Проверяем, жив ли еще процесс
@@ -169,7 +175,7 @@ func (m *Manager) stopProcess(process *Process) error {
 	}
 
 	// Отправляем SIGTERM
-	if err := process.cmd.Process.Signal(syscall.SIGTERM); err != nil { // Изменено: отправляем SIGTERM
+	if err := process.cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		log.Printf("Failed to send SIGTERM to server %s: %v", process.Name, err)
 		// Если не удалось отправить SIGTERM, отправляем SIGKILL
 		if err := process.cmd.Process.Kill(); err != nil {
@@ -186,10 +192,9 @@ func (m *Manager) stopProcess(process *Process) error {
 	select {
 	case err := <-waitChan:
 		if err != nil {
-			log.Printf("Server %s exited with error: %v", process.Name, err)
 			// Игнорируем ошибку wait: no child processes
 			if !strings.Contains(err.Error(), "no child processes") {
-				// Если это другая ошибка, возвращаем ее
+				log.Printf("Server %s exited with error: %v", process.Name, err)
 				return err
 			}
 		} else {
@@ -211,14 +216,12 @@ func (m *Manager) stopProcess(process *Process) error {
 	return nil
 }
 
-// IsRunning проверяет, запущен ли процесс.
 func (p *Process) IsRunning() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.running
 }
 
-// GetServers returns a copy of the server list.
 func (m *Manager) GetServers() []Server {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -228,7 +231,6 @@ func (m *Manager) GetServers() []Server {
 	return serversCopy
 }
 
-// IsServerRunning проверяет, запущен ли конкретный сервер
 func (m *Manager) IsServerRunning(serverName string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
