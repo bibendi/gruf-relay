@@ -15,7 +15,6 @@ import (
 )
 
 // TODO:
-// - TLS Support
 // - Metrics
 // - Coverage
 // - Testify
@@ -24,58 +23,52 @@ import (
 func main() {
 	log.Println("Starting Gruf Relay...")
 
-	// 1. Load configuration
+	// Load configuration
 	cfg, err := config.LoadConfig("config/gruf-relay.yml")
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 	log.Printf("Configuration loaded: %+v", cfg)
 
-	// 2. Initialize Process Manager
-	pm, err := process.NewManager(cfg)
-	if err != nil {
-		log.Fatalf("Failed to initialize process manager: %v", err)
-	}
+	// Initialize Process Manager
+	pm := process.NewManager(cfg)
 	log.Println("Process manager initialized")
 
-	// 3. Start Ruby servers
+	// Start Ruby servers
 	if err := pm.StartAll(); err != nil {
 		log.Fatalf("Failed to start ruby servers: %v", err)
 	}
 	log.Println("Ruby servers started")
 
-	// 4. Initialize Health Checker
+	// Initialize Health Checker
 	hc := healthcheck.NewChecker(pm, cfg)
-	log.Println("Health checker initialized")
-
-	// 5. Start Health Checker
 	hc.Start()
 	log.Println("Health checker started")
 
-	// 6. Initialize Load Balancer
-	lb := loadbalance.NewRoundRobin(pm) // You can select another algorithm
-	log.Printf("Load balancer initialized (Round Robin), %v", lb)
+	// Initialize Load Balancer
+	lb := loadbalance.NewRoundRobin(pm)
+	log.Printf("Load balancer initialized, %v", lb)
 
-	// 7. Initialize GRPC Proxy
+	// Initialize gRPC Proxy
 	grpcProxy := proxy.NewProxy(lb)
-	log.Println("GRPC proxy initialized")
+	log.Println("gRPC proxy initialized")
 
-	// 8. Create GRPC server
+	// Create gRPC server
 	grpcServer := server.NewServer(cfg, grpcProxy)
 	grpcServer.Start()
-	log.Println("GRPC server started")
+	log.Println("gRPC server started")
 
-	// 11. Graceful shutdown
+	// Graceful shutdown
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	<-signalCh
 	log.Println("Received termination signal, initiating graceful shutdown...")
 
-	// 12. Stop GRPC server
+	// Stop gRPC server
 	grpcServer.Stop()
 
-	// 13. Stop processes
+	// Stop processes
 	if err := pm.StopAll(); err != nil {
 		log.Printf("Error stopping ruby servers: %v", err)
 	}

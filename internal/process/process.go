@@ -1,11 +1,9 @@
-// internal/process/process.go
 package process
 
 import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -13,180 +11,142 @@ import (
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/codec"
-	"github.com/bibendi/gruf-relay/internal/config"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type Manager struct {
-	servers   []Server
-	mu        sync.Mutex
-	Processes map[string]*Process
-}
-
-type Server struct {
-	Name    string
-	Command []string
-	Port    int
-}
-
 type Process struct {
 	Name     string
-	Port     int
+	Addr     string
+	Client   *grpc.ClientConn
 	cmd      *exec.Cmd
 	mu       sync.Mutex
 	running  bool
 	stopping bool
-	Client   *grpc.ClientConn
 }
 
-func NewManager(cfg *config.Config) (*Manager, error) {
-	processes := make(map[string]*Process, cfg.Workers.Count)
-	servers := make([]Server, cfg.Workers.Count)
-	// Use a loop with index to correctly initialize the slices
-	for i := 0; i < cfg.Workers.Count; i++ { // Corrected loop condition
-		port := cfg.Workers.StartPort + i
-		name := fmt.Sprintf("worker-%d", i+1)
-		servers[i] = Server{
-			Name:    name,
-			Command: []string{"bundle", "exec", "gruf", "--host", fmt.Sprintf("0.0.0.0:%d", port), "--health-check", "--backtrace-on-error"},
-			Port:    port,
-		}
-
-		process := &Process{
-			Name:    name,
-			Port:    port,
-			cmd:     nil,
-			Client:  nil,
-			running: false,
-		}
-		processes[name] = process
+func NewProcess(name, addr string) *Process {
+	return &Process{
+		Name: name,
+		Addr: addr,
 	}
-	return &Manager{servers: servers, Processes: processes}, nil
 }
 
-func (m *Manager) StartAll() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	for i, server := range m.servers {
-		if err := m.startProcess(m.Processes[server.Name], m.servers[i]); err != nil {
-			return fmt.Errorf("failed to start server %s: %w", server.Name, err)
-		}
-	}
-	return nil
+func (p *Process) String() string {
+	return fmt.Sprintf("%s (%s)", p.Name, p.Addr)
 }
 
-func (m *Manager) startProcess(process *Process, server Server) error {
-	process.mu.Lock()
-	defer process.mu.Unlock()
+func (p *Process) Start() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-	if process.running {
-		return fmt.Errorf("server %s is already running", process.Name)
+	if p.running {
+		return fmt.Errorf("server %s is already running", p)
 	}
 
-	cmd := exec.Command(server.Command[0], server.Command[1:]...)
-	if errors.Is(cmd.Err, exec.ErrDot) {
-		cmd.Err = nil
-	}
-	cmd.Env = append(os.Environ(), fmt.Sprintf("PORT=%d", server.Port))
-	process.cmd = cmd
-	cmd.Stdout = log.Writer()
-	cmd.Stderr = log.Writer()
+	cmd := p.buildCmd()
+	p.cmd = cmd
 
-	log.Printf("Starting server %s on port %d with command: %v", process.Name, server.Port, server.Command)
+	log.Printf("Starting server %s", p)
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start server %s: %w", process.Name, err)
+		return fmt.Errorf("failed to start server %s: %w", p, err)
 	}
-
-	process.running = true
 
 	// Goroutine to wait for the process to complete
-	// TODO: restart process
+	// TODO: restart process on exit
 	go func() {
 		err := cmd.Wait()
-		if process.stopping {
+		if p.stopping {
 			return
 		}
 		if err != nil {
-			log.Printf("Server %s exited unexpectedly with error: %v", process.Name, err)
+			log.Printf("Server %s exited unexpectedly with error: %v", p, err)
 		} else {
-			log.Printf("Server %s exited normally", process.Name)
+			log.Printf("Server %s exited normally", p)
 		}
-		process.mu.Lock()
-		process.running = false
-		process.cmd = nil
-		process.mu.Unlock()
+		p.mu.Lock()
+		p.running = false
+		p.cmd = nil
+		p.mu.Unlock()
 	}()
 
-	// Establishing gRPC connection
-	client, err := grpc.NewClient(fmt.Sprintf("0.0.0.0:%d", server.Port), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithCodec(codec.Codec()))
+	// TODO: Establishing gRPC connection after the first successfull healthcheck.
+	//       Stop the process after 5 failed healthchecks.
+	time.Sleep(3 * time.Second)
+	client, err := grpc.NewClient(p.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithCodec(codec.Codec()))
 	if err != nil {
-		log.Fatalf("Failed connect to backend: %v", err)
+		log.Fatalf("Failed connect to server %s: %v", p, err)
 	}
-	process.Client = client
+	p.Client = client
+
+	p.running = true
 
 	return nil
 }
 
-func (m *Manager) StopAll() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	for _, process := range m.Processes {
-		if err := m.stopProcess(process); err != nil {
-			log.Printf("failed to stop server %s: %v", process.Name, err)
-		}
-	}
-	return nil
+func (p *Process) commandArgs() []string {
+	return []string{"bundle", "exec", "gruf", "--host", p.Addr, "--health-check", "--backtrace-on-error"}
 }
 
-func (m *Manager) stopProcess(process *Process) error {
-	process.mu.Lock()
-	defer process.mu.Unlock()
+func (p *Process) buildCmd() *exec.Cmd {
+	args := p.commandArgs()
+	cmd := exec.Command(args[0], args[1:]...)
+	// Allow to exec programs in the current directory
+	if errors.Is(cmd.Err, exec.ErrDot) {
+		cmd.Err = nil
+	}
 
-	if !process.running {
+	cmd.Stdout = log.Writer()
+	cmd.Stderr = log.Writer()
+	return cmd
+}
+
+func (p *Process) Stop() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if !p.running {
 		return nil
 	}
 
-	if process.stopping {
-		return fmt.Errorf("server %s is already stopping", process.Name)
+	if p.stopping {
+		return fmt.Errorf("server %s is already stopping", p)
 	}
-	process.stopping = true
+	p.stopping = true
 	defer func() {
-		process.stopping = false
+		p.stopping = false
 	}()
 
-	log.Printf("Stopping server %s", process.Name)
+	log.Printf("Stopping server %s", p)
 
-	if process.Client != nil {
-		log.Printf("Closing client connection on %s", process.Name)
-		if err := process.Client.Close(); err != nil {
-			log.Printf("failed closing client connection on %s: %v", process.Name, err)
+	if p.Client != nil {
+		log.Printf("Closing client connection to %s", p)
+		if err := p.Client.Close(); err != nil {
+			log.Printf("failed closing client connection to %s: %v", p, err)
 		}
 	}
 
 	// Check if the process is still alive
-	if process.cmd.ProcessState != nil && process.cmd.ProcessState.Exited() {
-		log.Printf("Server %s already exited, skipping stop", process.Name)
-		process.running = false
-		process.cmd = nil
+	if p.cmd.ProcessState != nil && p.cmd.ProcessState.Exited() {
+		log.Printf("Server %s already exited, skipping stop", p)
+		p.running = false
+		p.cmd = nil
 		return nil // Process has already completed, do nothing
 	}
 
 	// Send SIGTERM
-	if err := process.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		log.Printf("Failed to send SIGTERM to server %s: %v", process.Name, err)
+	if err := p.cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		log.Printf("Failed to send SIGTERM to server %s: %v", p, err)
 		// If sending SIGTERM fails, send SIGKILL
-		if err := process.cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("failed to kill server %s: %w", process.Name, err)
+		if err := p.cmd.Process.Kill(); err != nil {
+			return fmt.Errorf("failed to kill server %s: %w", p, err)
 		}
 	}
 
 	// Wait for the process to exit (with a timeout)
 	waitChan := make(chan error, 1)
 	go func() {
-		waitChan <- process.cmd.Wait()
+		waitChan <- p.cmd.Wait()
 	}()
 
 	select {
@@ -194,25 +154,27 @@ func (m *Manager) stopProcess(process *Process) error {
 		if err != nil {
 			// Ignore "wait: no child processes" error
 			if !strings.Contains(err.Error(), "no child processes") {
-				log.Printf("Server %s exited with error: %v", process.Name, err)
+				log.Printf("Server %s exited with error: %v", p, err)
 				return err
 			}
 		} else {
-			log.Printf("Server %s exited normally after SIGTERM", process.Name)
+			log.Printf("Server %s exited normally after SIGTERM", p)
 		}
-	case <-time.After(5 * time.Second): // Timeout after 5 seconds
-		log.Printf("Server %s did not exit after SIGTERM, sending SIGKILL", process.Name)
-		if err := process.cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("failed to kill server %s: %w", process.Name, err)
+	case <-time.After(5 * time.Second):
+		log.Printf("Server %s did not exit after SIGTERM, sending SIGKILL", p)
+		if err := p.cmd.Process.Kill(); err != nil {
+			return fmt.Errorf("failed to kill server %s: %w", p, err)
 		}
+
+		// FIXME: Should we really wait? We can hang there
 		err := <-waitChan // Wait for the process to exit after SIGKILL
 		if err != nil {
-			log.Printf("Server %s exited with error after SIGKILL: %v", process.Name, err)
+			log.Printf("Server %s exited with error after SIGKILL: %v", p, err)
 		}
 	}
 
-	process.running = false
-	process.cmd = nil
+	p.running = false
+	p.cmd = nil
 	return nil
 }
 
@@ -220,25 +182,4 @@ func (p *Process) IsRunning() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.running
-}
-
-func (m *Manager) GetServers() []Server {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	serversCopy := make([]Server, len(m.servers))
-	copy(serversCopy, m.servers)
-	return serversCopy
-}
-
-func (m *Manager) IsServerRunning(serverName string) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	process, ok := m.Processes[serverName]
-	if !ok {
-		return false
-	}
-
-	return process.IsRunning()
 }

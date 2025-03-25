@@ -3,7 +3,6 @@ package healthcheck
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -59,26 +58,24 @@ func (c *Checker) Stop() {
 }
 
 func (c *Checker) checkAll() {
-	servers := c.pm.GetServers()
+	servers := c.pm.GetProcesses()
 
 	for _, server := range servers {
 		c.checkServer(server)
 	}
 }
 
-func (c *Checker) checkServer(server process.Server) {
-	address := fmt.Sprintf("%s:%d", c.host, server.Port)
-
-	if !c.pm.IsServerRunning(server.Name) {
-		c.updateServerState(server.Name, connectivity.Shutdown)
-		log.Printf("Server %s is not running, state: %s", server.Name, connectivity.Shutdown)
+func (c *Checker) checkServer(p *process.Process) {
+	if !p.IsRunning() {
+		c.updateServerState(p.Name, connectivity.Shutdown)
+		log.Printf("Server %s is not running, state: %s", p, connectivity.Shutdown)
 		return
 	}
 
-	conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(3*time.Second)) // Reduced timeout
+	conn, err := grpc.Dial(p.Addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
 	if err != nil {
-		c.updateServerState(server.Name, connectivity.TransientFailure)
-		log.Printf("Failed to dial server %s: %v, state: %s", server.Name, err, connectivity.TransientFailure)
+		c.updateServerState(p.Name, connectivity.TransientFailure)
+		log.Printf("Failed to dial server %s: %v, state: %s", p, err, connectivity.TransientFailure)
 		return
 	}
 	defer conn.Close()
@@ -90,8 +87,8 @@ func (c *Checker) checkServer(server process.Server) {
 	req := &healthpb.HealthCheckRequest{}
 	resp, err := client.Check(ctx, req)
 	if err != nil {
-		c.updateServerState(server.Name, connectivity.TransientFailure)
-		log.Printf("Health check failed for server %s: %v, state: %s", server.Name, err, connectivity.TransientFailure)
+		c.updateServerState(p.Name, connectivity.TransientFailure)
+		log.Printf("Health check failed for server %s: %v, state: %s", p, err, connectivity.TransientFailure)
 		return
 	}
 
@@ -105,20 +102,20 @@ func (c *Checker) checkServer(server process.Server) {
 		state = connectivity.TransientFailure
 	}
 
-	c.updateServerState(server.Name, state)
-	log.Printf("Server %s health check status: %s, state: %s", server.Name, resp.Status, state)
+	c.updateServerState(p.Name, state)
+	log.Printf("Server %s health check status: %s, state: %s", p, resp.Status, state)
 }
 
-func (c *Checker) updateServerState(serverName string, state connectivity.State) {
+func (c *Checker) updateServerState(name string, state connectivity.State) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.serverStates[serverName] = state
+	c.serverStates[name] = state
 }
 
-func (c *Checker) GetServerState(serverName string) connectivity.State {
+func (c *Checker) GetServerState(name string) connectivity.State {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	state, ok := c.serverStates[serverName]
+	state, ok := c.serverStates[name]
 	if !ok {
 		return connectivity.Shutdown
 	}

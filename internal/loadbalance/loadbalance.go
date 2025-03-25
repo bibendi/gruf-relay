@@ -11,17 +11,17 @@ type Balancer interface {
 }
 
 type RoundRobin struct {
-	processes      map[string]*process.Process
-	mu             sync.Mutex
-	nextIndex      int
-	processManager *process.Manager
+	processes map[string]*process.Process
+	mu        sync.Mutex
+	nextIndex int
+	pm        *process.Manager
 }
 
 func NewRoundRobin(pm *process.Manager) *RoundRobin {
 	return &RoundRobin{
-		processes:      pm.Processes,
-		processManager: pm,
-		nextIndex:      0,
+		processes: pm.GetProcesses(),
+		pm:        pm,
+		nextIndex: 0,
 	}
 }
 
@@ -43,7 +43,7 @@ func (rr *RoundRobin) Next() *process.Process {
 
 func (rr *RoundRobin) getAvailableProcesses() []*process.Process {
 	available := []*process.Process{}
-	for _, p := range rr.processManager.Processes {
+	for _, p := range rr.pm.GetProcesses() {
 		if p.IsRunning() {
 			available = append(available, p)
 		}
