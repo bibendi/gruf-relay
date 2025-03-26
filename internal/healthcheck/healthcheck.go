@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/config"
+	"github.com/bibendi/gruf-relay/internal/manager"
 	"github.com/bibendi/gruf-relay/internal/process"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
@@ -15,7 +16,7 @@ import (
 )
 
 type Checker struct {
-	pm           *process.Manager
+	pm           *manager.Manager
 	interval     time.Duration
 	host         string
 	serverStates map[string]connectivity.State
@@ -23,7 +24,7 @@ type Checker struct {
 	mu           sync.RWMutex
 }
 
-func NewChecker(pm *process.Manager, cfg *config.Config) *Checker {
+func NewChecker(pm *manager.Manager, cfg *config.Config) *Checker {
 	return &Checker{
 		pm:           pm,
 		interval:     cfg.HealthCheckInterval,

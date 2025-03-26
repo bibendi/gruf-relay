@@ -9,7 +9,7 @@ import (
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/healthcheck"
 	"github.com/bibendi/gruf-relay/internal/loadbalance"
-	"github.com/bibendi/gruf-relay/internal/process"
+	"github.com/bibendi/gruf-relay/internal/manager"
 	"github.com/bibendi/gruf-relay/internal/proxy"
 	"github.com/bibendi/gruf-relay/internal/server"
 )
@@ -31,7 +31,7 @@ func main() {
 	log.Printf("Configuration loaded: %+v", cfg)
 
 	// Initialize Process Manager
-	pm := process.NewManager(cfg)
+	pm := manager.NewManager(cfg)
 	log.Println("Process manager initialized")
 
 	// Start Ruby servers

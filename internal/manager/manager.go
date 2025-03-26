@@ -1,4 +1,4 @@
-package process
+package manager
 
 import (
 	"fmt"
@@ -6,21 +6,22 @@ import (
 	"sync"
 
 	"github.com/bibendi/gruf-relay/internal/config"
+	"github.com/bibendi/gruf-relay/internal/process"
 )
 
 type Manager struct {
-	processes map[string]*Process
+	processes map[string]*process.Process
 	mu        sync.Mutex
 }
 
 func NewManager(cfg *config.Config) *Manager {
-	processes := make(map[string]*Process, cfg.Workers.Count)
+	processes := make(map[string]*process.Process, cfg.Workers.Count)
 
 	for i := range cfg.Workers.Count {
 		name := fmt.Sprintf("worker-%d", i+1)
 		port := cfg.Workers.StartPort + i
 		addr := fmt.Sprintf("0.0.0.0:%d", port)
-		processes[name] = NewProcess(name, addr)
+		processes[name] = process.NewProcess(name, addr)
 	}
 
 	return &Manager{processes: processes}
@@ -50,7 +51,7 @@ func (m *Manager) StopAll() error {
 	return nil
 }
 
-func (m *Manager) GetProcesses() map[string]*Process {
+func (m *Manager) GetProcesses() map[string]*process.Process {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

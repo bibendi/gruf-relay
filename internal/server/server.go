@@ -33,13 +33,13 @@ func NewServer(cfg *config.Config, proxy *proxy.Proxy) *Server {
 }
 
 func (s *Server) Start() {
-	uri := fmt.Sprintf("%s:%d", s.host, s.port)
-	lis, err := net.Listen("tcp", uri)
+	addr := fmt.Sprintf("%s:%d", s.host, s.port)
+	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	log.Printf("Starting gRPC server on %s", uri)
+	log.Printf("Starting gRPC server on %s", addr)
 
 	go func() {
 		if err := s.grpcServer.Serve(lis); err != nil {

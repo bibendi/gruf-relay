@@ -3,6 +3,7 @@ package loadbalance
 import (
 	"sync"
 
+	"github.com/bibendi/gruf-relay/internal/manager"
 	"github.com/bibendi/gruf-relay/internal/process"
 )
 
@@ -14,10 +15,10 @@ type RoundRobin struct {
 	processes map[string]*process.Process
 	mu        sync.Mutex
 	nextIndex int
-	pm        *process.Manager
+	pm        *manager.Manager
 }
 
-func NewRoundRobin(pm *process.Manager) *RoundRobin {
+func NewRoundRobin(pm *manager.Manager) *RoundRobin {
 	return &RoundRobin{
 		processes: pm.GetProcesses(),
 		pm:        pm,
@@ -43,7 +44,9 @@ func (rr *RoundRobin) Next() *process.Process {
 
 func (rr *RoundRobin) getAvailableProcesses() []*process.Process {
 	available := []*process.Process{}
+	// FIXME: Remove access by mutex
 	for _, p := range rr.pm.GetProcesses() {
+		// FIXME: Check process health
 		if p.IsRunning() {
 			available = append(available, p)
 		}
