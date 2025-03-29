@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/config"
+	"github.com/bibendi/gruf-relay/internal/loadbalance"
 	"github.com/bibendi/gruf-relay/internal/manager"
 	"github.com/bibendi/gruf-relay/internal/process"
 	"google.golang.org/grpc"
@@ -17,6 +18,7 @@ import (
 
 type Checker struct {
 	pm           *manager.Manager
+	lb           *loadbalance.RandomBalancer
 	interval     time.Duration
 	host         string
 	serverStates map[string]connectivity.State
@@ -24,9 +26,10 @@ type Checker struct {
 	mu           sync.RWMutex
 }
 
-func NewChecker(pm *manager.Manager, cfg *config.Config) *Checker {
+func NewChecker(pm *manager.Manager, cfg *config.Config, lb *loadbalance.RandomBalancer) *Checker {
 	return &Checker{
 		pm:           pm,
+		lb:           lb,
 		interval:     cfg.HealthCheckInterval,
 		host:         cfg.Host,
 		serverStates: make(map[string]connectivity.State),
@@ -66,6 +69,7 @@ func (c *Checker) checkAll() {
 
 func (c *Checker) checkServer(p *process.Process) {
 	if !p.IsRunning() {
+		c.lb.RemoveProcess(p)
 		c.updateServerState(p.Name, connectivity.Shutdown)
 		log.Printf("Server %s is not running, state: %s", p, connectivity.Shutdown)
 		return
@@ -73,6 +77,7 @@ func (c *Checker) checkServer(p *process.Process) {
 
 	conn, err := grpc.Dial(p.Addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
 	if err != nil {
+		c.lb.RemoveProcess(p)
 		c.updateServerState(p.Name, connectivity.TransientFailure)
 		log.Printf("Failed to dial server %s: %v, state: %s", p, err, connectivity.TransientFailure)
 		return
@@ -86,6 +91,7 @@ func (c *Checker) checkServer(p *process.Process) {
 	req := &healthpb.HealthCheckRequest{}
 	resp, err := client.Check(ctx, req)
 	if err != nil {
+		c.lb.RemoveProcess(p)
 		c.updateServerState(p.Name, connectivity.TransientFailure)
 		log.Printf("Health check failed for server %s: %v, state: %s", p, err, connectivity.TransientFailure)
 		return
@@ -95,10 +101,13 @@ func (c *Checker) checkServer(p *process.Process) {
 	switch resp.Status {
 	case healthpb.HealthCheckResponse_SERVING:
 		state = connectivity.Ready
+		c.lb.AddProcess(p)
 	case healthpb.HealthCheckResponse_NOT_SERVING:
 		state = connectivity.TransientFailure
+		c.lb.RemoveProcess(p)
 	default:
 		state = connectivity.TransientFailure
+		c.lb.RemoveProcess(p)
 	}
 
 	c.updateServerState(p.Name, state)

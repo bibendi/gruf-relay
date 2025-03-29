@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/bibendi/gruf-relay/internal/loadbalance"
+	"github.com/bibendi/gruf-relay/internal/process"
 )
 
 var (
@@ -22,11 +22,15 @@ var (
 	}
 )
 
-type Proxy struct {
-	Balancer loadbalance.Balancer
+type Balancer interface {
+	Next() *process.Process
 }
 
-func NewProxy(balancer loadbalance.Balancer) *Proxy {
+type Proxy struct {
+	Balancer Balancer
+}
+
+func NewProxy(balancer Balancer) *Proxy {
 	return &Proxy{
 		Balancer: balancer,
 	}

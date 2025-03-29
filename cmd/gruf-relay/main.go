@@ -42,14 +42,14 @@ func main() {
 	}
 	log.Println("Ruby servers started")
 
+	// Initialize Load Balancer
+	lb := loadbalance.NewRandomBalancer()
+	lb.Start()
+
 	// Initialize Health Checker
-	hc := healthcheck.NewChecker(pm, cfg)
+	hc := healthcheck.NewChecker(pm, cfg, lb)
 	hc.Start()
 	log.Println("Health checker started")
-
-	// Initialize Load Balancer
-	lb := loadbalance.NewRoundRobin(pm)
-	log.Printf("Load balancer initialized, %v", lb)
 
 	// Initialize gRPC Proxy
 	grpcProxy := proxy.NewProxy(lb)
@@ -66,6 +66,9 @@ func main() {
 
 	<-signalCh
 	log.Println("Received termination signal, initiating graceful shutdown...")
+
+	// Stop load balancer
+	lb.Stop()
 
 	// Stop gRPC server
 	grpcServer.Stop()

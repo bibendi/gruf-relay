@@ -1,53 +1,97 @@
 package loadbalance
 
 import (
+	"log"
+	"math/rand"
 	"sync"
+	"sync/atomic"
 
-	"github.com/bibendi/gruf-relay/internal/manager"
+	"slices"
+
 	"github.com/bibendi/gruf-relay/internal/process"
 )
 
-type Balancer interface {
-	Next() *process.Process
+type RandomBalancer struct {
+	addChan      chan *process.Process
+	removeChan   chan *process.Process
+	processes    atomic.Value
+	processNames map[string]bool
+	done         chan struct{}
+	mu           sync.Mutex
 }
 
-type RoundRobin struct {
-	mu        sync.Mutex
-	nextIndex int
-	pm        *manager.Manager
-}
-
-func NewRoundRobin(pm *manager.Manager) *RoundRobin {
-	return &RoundRobin{
-		pm:        pm,
-		nextIndex: 0,
+func NewRandomBalancer() *RandomBalancer {
+	rb := &RandomBalancer{
+		addChan:      make(chan *process.Process),
+		removeChan:   make(chan *process.Process),
+		done:         make(chan struct{}),
+		processNames: make(map[string]bool),
 	}
+	rb.processes.Store([]*process.Process{})
+	return rb
 }
 
-func (rr *RoundRobin) Next() *process.Process {
-	rr.mu.Lock()
-	defer rr.mu.Unlock()
+func (rb *RandomBalancer) Start() {
+	log.Println("Starting to balance processes")
+	go rb.balance()
+}
 
-	availableProcesses := rr.getAvailableProcesses()
-	if len(availableProcesses) == 0 {
+func (rb *RandomBalancer) AddProcess(p *process.Process) {
+	rb.addChan <- p
+}
+
+func (rb *RandomBalancer) RemoveProcess(p *process.Process) {
+	rb.removeChan <- p
+}
+
+func (rb *RandomBalancer) Next() *process.Process {
+	processes := rb.processes.Load().([]*process.Process)
+	if len(processes) == 0 {
 		return nil
 	}
 
-	index := rr.nextIndex % len(availableProcesses)
-	proc := availableProcesses[index]
-	rr.nextIndex++
-
-	return proc
+	index := rand.Intn(len(processes))
+	return processes[index]
 }
 
-func (rr *RoundRobin) getAvailableProcesses() []*process.Process {
-	available := []*process.Process{}
-	// FIXME: Remove access by mutex
-	for _, p := range rr.pm.Processes {
-		// FIXME: Check process health
-		if p.IsRunning() {
-			available = append(available, p)
+func (rb *RandomBalancer) Stop() {
+	close(rb.done)
+}
+
+func (rb *RandomBalancer) balance() {
+	for {
+		select {
+		case p := <-rb.addChan:
+			rb.mu.Lock()
+			if _, ok := rb.processNames[p.Name]; ok {
+				rb.mu.Unlock()
+				continue
+			}
+			currentProcesses := rb.processes.Load().([]*process.Process)
+			rb.processes.Store(append(currentProcesses, p))
+			rb.processNames[p.Name] = true
+			rb.mu.Unlock()
+		case p := <-rb.removeChan:
+			rb.mu.Lock()
+			if _, ok := rb.processNames[p.Name]; !ok {
+				rb.mu.Unlock()
+				continue
+			}
+			currentProcesses := rb.processes.Load().([]*process.Process)
+			var newProcesses []*process.Process
+			for i, cp := range currentProcesses {
+				if cp.Name == p.Name {
+					newProcesses = slices.Delete(currentProcesses, i, i+1)
+					break
+				}
+			}
+			delete(rb.processNames, p.Name)
+			rb.processes.Store(newProcesses)
+
+			rb.mu.Unlock()
+		case <-rb.done:
+			log.Println("Stopping load balancer")
+			return
 		}
 	}
-	return available
 }
