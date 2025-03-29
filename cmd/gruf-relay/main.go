@@ -15,17 +15,18 @@ import (
 )
 
 // TODO:
+// - cleanenv
+// - slog
+// - Testify
 // - Metrics
 // - Coverage
-// - Testify
-// - slog
-// - cleanenv
 func main() {
 	log.Println("Starting Gruf Relay...")
 
 	// Load configuration
 	cfg, err := config.LoadConfig("config/gruf-relay.yml")
 	if err != nil {
+		// FIXME: Exit with panic
 		log.Fatalf("Failed to load config: %v", err)
 	}
 	log.Printf("Configuration loaded: %+v", cfg)
@@ -36,6 +37,7 @@ func main() {
 
 	// Start Ruby servers
 	if err := pm.StartAll(); err != nil {
+		// FIXME: Exit with panic
 		log.Fatalf("Failed to start ruby servers: %v", err)
 	}
 	log.Println("Ruby servers started")

@@ -59,9 +59,7 @@ func (c *Checker) Stop() {
 }
 
 func (c *Checker) checkAll() {
-	servers := c.pm.GetProcesses()
-
-	for _, server := range servers {
+	for _, server := range c.pm.Processes {
 		c.checkServer(server)
 	}
 }

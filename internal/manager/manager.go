@@ -10,7 +10,7 @@ import (
 )
 
 type Manager struct {
-	processes map[string]*process.Process
+	Processes map[string]*process.Process
 	mu        sync.Mutex
 }
 
@@ -24,14 +24,14 @@ func NewManager(cfg *config.Config) *Manager {
 		processes[name] = process.NewProcess(name, addr)
 	}
 
-	return &Manager{processes: processes}
+	return &Manager{Processes: processes}
 }
 
 func (m *Manager) StartAll() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for _, process := range m.processes {
+	for _, process := range m.Processes {
 		if err := process.Start(); err != nil {
 			return fmt.Errorf("failed to start server %s: %w", process, err)
 		}
@@ -43,17 +43,10 @@ func (m *Manager) StopAll() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for _, process := range m.processes {
+	for _, process := range m.Processes {
 		if err := process.Stop(); err != nil {
 			log.Printf("failed to stop server %s: %v", process, err)
 		}
 	}
 	return nil
-}
-
-func (m *Manager) GetProcesses() map[string]*process.Process {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	return m.processes
 }
