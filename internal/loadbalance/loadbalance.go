@@ -1,6 +1,7 @@
 package loadbalance
 
 import (
+	"context"
 	"log"
 	"math/rand"
 	"sync"
@@ -18,14 +19,20 @@ type RandomBalancer struct {
 	processNames map[string]bool
 	done         chan struct{}
 	mu           sync.Mutex
+	ctx          context.Context
+	wg           *sync.WaitGroup
 }
 
-func NewRandomBalancer() *RandomBalancer {
+func NewRandomBalancer(ctx context.Context, wg *sync.WaitGroup) *RandomBalancer {
+	wg.Add(1)
+
 	rb := &RandomBalancer{
 		addChan:      make(chan *process.Process),
 		removeChan:   make(chan *process.Process),
 		done:         make(chan struct{}),
 		processNames: make(map[string]bool),
+		ctx:          ctx,
+		wg:           wg,
 	}
 	rb.processes.Store([]*process.Process{})
 	return rb
@@ -33,6 +40,7 @@ func NewRandomBalancer() *RandomBalancer {
 
 func (rb *RandomBalancer) Start() {
 	log.Println("Starting to balance processes")
+	go rb.waitCtxDone()
 	go rb.balance()
 }
 
@@ -54,7 +62,8 @@ func (rb *RandomBalancer) Next() *process.Process {
 	return processes[index]
 }
 
-func (rb *RandomBalancer) Stop() {
+func (rb *RandomBalancer) waitCtxDone() {
+	<-rb.ctx.Done()
 	close(rb.done)
 }
 
@@ -91,6 +100,7 @@ func (rb *RandomBalancer) balance() {
 			rb.mu.Unlock()
 		case <-rb.done:
 			log.Println("Stopping load balancer")
+			rb.wg.Done()
 			return
 		}
 	}

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 logger = Logger.new($stdout)
+logger.level = Logger::INFO
 
 require_relative "../../pkg/server/jobs_pb"
 require_relative "../../pkg/server/jobs_services_pb"

@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/bibendi/gruf-relay/internal/config"
@@ -19,46 +22,42 @@ import (
 // - slog
 // - Testify
 // - Metrics
+// - k8s probes
 // - Coverage
 func main() {
-	log.Println("Starting Gruf Relay...")
+	log.Println("Starting gRPC Gruf Relay")
 
 	// Load configuration
 	cfg, err := config.LoadConfig("config/gruf-relay.yml")
 	if err != nil {
-		// FIXME: Exit with panic
-		log.Fatalf("Failed to load config: %v", err)
+		panic(fmt.Sprintf("Failed to load config: %v", err))
 	}
-	log.Printf("Configuration loaded: %+v", cfg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
 
 	// Initialize Process Manager
-	pm := manager.NewManager(cfg)
-	log.Println("Process manager initialized")
+	pm := manager.NewManager(ctx, &wg, cfg)
 
 	// Start Ruby servers
 	if err := pm.StartAll(); err != nil {
-		// FIXME: Exit with panic
-		log.Fatalf("Failed to start ruby servers: %v", err)
+		panic(fmt.Sprintf("Failed to start ruby servers: %v", err))
 	}
-	log.Println("Ruby servers started")
 
 	// Initialize Load Balancer
-	lb := loadbalance.NewRandomBalancer()
+	lb := loadbalance.NewRandomBalancer(ctx, &wg)
 	lb.Start()
 
 	// Initialize Health Checker
-	hc := healthcheck.NewChecker(pm, cfg, lb)
+	hc := healthcheck.NewChecker(ctx, &wg, pm, cfg, lb)
 	hc.Start()
-	log.Println("Health checker started")
 
 	// Initialize gRPC Proxy
 	grpcProxy := proxy.NewProxy(lb)
-	log.Println("gRPC proxy initialized")
 
 	// Create gRPC server
 	grpcServer := server.NewServer(cfg, grpcProxy)
 	grpcServer.Start()
-	log.Println("gRPC server started")
 
 	// Graceful shutdown
 	signalCh := make(chan os.Signal, 1)
@@ -67,16 +66,12 @@ func main() {
 	<-signalCh
 	log.Println("Received termination signal, initiating graceful shutdown...")
 
-	// Stop load balancer
-	lb.Stop()
-
 	// Stop gRPC server
 	grpcServer.Stop()
 
 	// Stop processes
-	if err := pm.StopAll(); err != nil {
-		log.Printf("Error stopping ruby servers: %v", err)
-	}
+	cancel()
+	wg.Wait()
 
-	log.Println("Goodbye")
+	log.Println("Goodbye!")
 }

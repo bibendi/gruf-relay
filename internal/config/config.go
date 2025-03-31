@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -36,6 +37,8 @@ func LoadConfig(filename string) (*Config, error) {
 	if err := validateConfig(&config); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
+
+	log.Printf("Configuration loaded: %+v", config)
 
 	return &config, nil
 }

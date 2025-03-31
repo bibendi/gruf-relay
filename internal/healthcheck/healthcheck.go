@@ -24,9 +24,12 @@ type Checker struct {
 	serverStates map[string]connectivity.State
 	stopChan     chan struct{}
 	mu           sync.RWMutex
+	ctx          context.Context
+	wg           *sync.WaitGroup
 }
 
-func NewChecker(pm *manager.Manager, cfg *config.Config, lb *loadbalance.RandomBalancer) *Checker {
+func NewChecker(ctx context.Context, wg *sync.WaitGroup, pm *manager.Manager, cfg *config.Config, lb *loadbalance.RandomBalancer) *Checker {
+	wg.Add(1)
 	return &Checker{
 		pm:           pm,
 		lb:           lb,
@@ -34,10 +37,13 @@ func NewChecker(pm *manager.Manager, cfg *config.Config, lb *loadbalance.RandomB
 		host:         cfg.Host,
 		serverStates: make(map[string]connectivity.State),
 		stopChan:     make(chan struct{}),
+		ctx:          ctx,
+		wg:           wg,
 	}
 }
 
 func (c *Checker) Start() {
+	go c.waitCtxDone()
 	go c.run()
 	log.Println("Health checker started")
 }
@@ -52,15 +58,18 @@ func (c *Checker) run() {
 			c.checkAll()
 		case <-c.stopChan:
 			log.Println("Health checker stopped")
+			c.wg.Done()
 			return
 		}
 	}
 }
 
-func (c *Checker) Stop() {
+func (c *Checker) waitCtxDone() {
+	<-c.ctx.Done()
 	close(c.stopChan)
 }
 
+// TODO: check servers in parallel
 func (c *Checker) checkAll() {
 	for _, server := range c.pm.Processes {
 		c.checkServer(server)
