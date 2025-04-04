@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -17,25 +16,28 @@ import (
 )
 
 type Process struct {
-	Name     string
-	Addr     string
-	Client   *grpc.ClientConn
-	ctx      context.Context
-	wg       *sync.WaitGroup
-	cmd      *exec.Cmd
-	mu       sync.Mutex
-	running  bool
-	stopping bool
-	done     chan struct{}
+	Name        string
+	Addr        string
+	Client      *grpc.ClientConn
+	ctx         context.Context
+	wg          *sync.WaitGroup
+	cmd         *exec.Cmd
+	mu          sync.Mutex
+	running     bool
+	stopping    bool
+	cmdDoneChan chan error
+	startOnce   sync.Once
 }
 
 func NewProcess(ctx context.Context, wg *sync.WaitGroup, name, addr string) *Process {
 	wg.Add(1)
 	return &Process{
-		Name: name,
-		Addr: addr,
-		ctx:  ctx,
-		wg:   wg,
+		Name:        name,
+		Addr:        addr,
+		ctx:         ctx,
+		wg:          wg,
+		cmdDoneChan: make(chan error, 1),
+		startOnce:   sync.Once{},
 	}
 }
 
@@ -48,21 +50,22 @@ func (p *Process) Start() error {
 	defer p.mu.Unlock()
 
 	if p.running {
-		return fmt.Errorf("server %s is already running", p)
+		log.Printf("Server %s is already running", p)
+		return nil
 	}
 
-	p.done = make(chan struct{})
-
-	cmd := p.buildCmd()
-	p.cmd = cmd
+	if p.stopping {
+		log.Printf("Server %s is already stopping", p)
+		return nil
+	}
 
 	log.Printf("Starting server %s", p)
-	if err := cmd.Start(); err != nil {
+	p.cmd = p.buildCmd()
+	if err := p.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start server %s: %w", p, err)
 	}
 
 	// TODO: Establishing gRPC connection after the first successfull healthcheck.
-	//       Stop the process after 5 failed healthchecks.
 	time.Sleep(3 * time.Second)
 	if err := p.initGrpcClient(); err != nil {
 		return fmt.Errorf("failed to init gRPC client to server %s: %w", p, err)
@@ -70,34 +73,31 @@ func (p *Process) Start() error {
 
 	p.running = true
 
-	go p.waitCtxDone()
-	go p.monitor()
+	p.startOnce.Do(func() {
+		go p.waitShoutdown()
+	})
+	go p.waitCmdDone()
 
 	return nil
 }
 
-// TODO: refactor this method
-func (p *Process) Stop() error {
+func (p *Process) shoutdown() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	defer p.wg.Done()
 
 	if !p.running {
-		log.Printf("Trying to stop not running server %s", p)
+		log.Printf("Server %s is not running", p)
 		return nil
 	}
 
 	if p.stopping {
-		return fmt.Errorf("server %s is already stopping", p)
+		log.Printf("Server %s is already stopping", p)
+		return nil
 	}
-	p.stopping = true
-	defer func() {
-		p.stopping = false
-	}()
-
-	close(p.done)
 
 	log.Printf("Stopping server %s", p)
+	p.stopping = true
 
 	if p.Client != nil {
 		log.Printf("Closing client connection to %s", p)
@@ -108,52 +108,28 @@ func (p *Process) Stop() error {
 
 	// Check if the process is still alive
 	if p.cmd.ProcessState != nil && p.cmd.ProcessState.Exited() {
-		log.Printf("Server %s already exited, skipping stop", p)
-		p.running = false
-		p.cmd = nil
-		return nil // Process has already completed, do nothing
+		log.Printf("Server %s already exited", p)
+		return nil
 	}
 
 	// Send SIGTERM
 	if err := p.cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		log.Printf("Failed to send SIGTERM to server %s: %v", p, err)
-		// If sending SIGTERM fails, send SIGKILL
 		if err := p.cmd.Process.Kill(); err != nil {
 			return fmt.Errorf("failed to kill server %s: %w", p, err)
 		}
 	}
-
-	// Wait for the process to exit (with a timeout)
-	waitChan := make(chan error, 1)
-	go func() {
-		waitChan <- p.cmd.Wait()
-	}()
 
 	select {
-	case err := <-waitChan:
-		if err != nil {
-			// Ignore "wait: no child processes" error
-			if !strings.Contains(err.Error(), "no child processes") {
-				log.Printf("Server %s exited with error: %v", p, err)
-				return err
-			}
-		} else {
-			log.Printf("Server %s exited normally after SIGTERM", p)
-		}
+	case <-p.cmdDoneChan:
+		log.Printf("Server %s has stopped", p)
 	case <-time.After(5 * time.Second):
-		log.Printf("Server %s did not exit after SIGTERM, sending SIGKILL", p)
+		log.Printf("Timeout waiting for server %s to exit, sending SIGKILL", p)
 		if err := p.cmd.Process.Kill(); err != nil {
 			return fmt.Errorf("failed to kill server %s: %w", p, err)
 		}
-
-		err := <-waitChan // Wait for the process to exit after SIGKILL
-		if err != nil {
-			log.Printf("Server %s exited with error after SIGKILL: %v", p, err)
-		}
 	}
 
-	p.running = false
-	p.cmd = nil
 	return nil
 }
 
@@ -186,31 +162,34 @@ func (p *Process) initGrpcClient() error {
 	return err
 }
 
-func (p *Process) waitCtxDone() {
-	select {
-	case <-p.ctx.Done():
-		p.Stop()
-	case <-p.done:
-		// do nothing
+func (p *Process) waitShoutdown() {
+	<-p.ctx.Done()
+
+	if err := p.shoutdown(); err != nil {
+		log.Printf("Failed to shutdown server %s: %v", p, err)
 	}
 }
 
-// Goroutine to wait for the process to complete
-func (p *Process) monitor() {
-	if err := p.cmd.Wait(); err != nil {
-		if p.stopping {
-			return
-		}
+func (p *Process) waitCmdDone() {
+	err := p.cmd.Wait()
+	if err != nil {
 		log.Printf("Server %s exited unexpectedly with error: %v", p, err)
 	} else {
 		log.Printf("Server %s exited normally", p)
 	}
 
+	if p.stopping {
+		p.cmdDoneChan <- err
+		close(p.cmdDoneChan)
+		return
+	}
+
 	p.mu.Lock()
 	p.running = false
-	p.cmd = nil
 	p.mu.Unlock()
-
 	time.Sleep(2 * time.Second)
-	p.Start()
+
+	if err := p.Start(); err != nil {
+		log.Printf("Failed to restart server %s: %v", p, err)
+	}
 }
