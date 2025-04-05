@@ -60,8 +60,11 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 	downstreamCtx, downstreamCancel := context.WithCancel(outCtx)
 	defer downstreamCancel()
 
-	// TODO: Should the process establish gRPC connection by itself?
-	downstream, err := grpc.NewClientStream(downstreamCtx, downstreamDescForProxying, process.Client, fullMethod)
+	client, err := process.GetClient()
+	if err != nil {
+		return status.Errorf(codes.Unavailable, "failed getting grpc client: %v", err)
+	}
+	downstream, err := grpc.NewClientStream(downstreamCtx, downstreamDescForProxying, client, fullMethod)
 	if err != nil {
 		return status.Errorf(codes.Unavailable, "failed creating downstream: %v", err)
 	}

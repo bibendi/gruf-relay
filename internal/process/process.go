@@ -18,13 +18,12 @@ import (
 type Process struct {
 	Name        string
 	Addr        string
-	Client      *grpc.ClientConn
+	client      *grpc.ClientConn
 	ctx         context.Context
 	wg          *sync.WaitGroup
 	cmd         *exec.Cmd
 	mu          sync.Mutex
 	running     bool
-	stopping    bool
 	cmdDoneChan chan error
 	startOnce   sync.Once
 }
@@ -54,21 +53,12 @@ func (p *Process) Start() error {
 		return nil
 	}
 
-	if p.stopping {
-		log.Printf("Server %s is already stopping", p)
-		return nil
-	}
+	p.client = nil
 
 	log.Printf("Starting server %s", p)
 	p.cmd = p.buildCmd()
 	if err := p.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start server %s: %w", p, err)
-	}
-
-	// TODO: Establishing gRPC connection after the first successfull healthcheck.
-	time.Sleep(3 * time.Second)
-	if err := p.initGrpcClient(); err != nil {
-		return fmt.Errorf("failed to init gRPC client to server %s: %w", p, err)
 	}
 
 	p.running = true
@@ -86,25 +76,21 @@ func (p *Process) shoutdown() error {
 	defer p.mu.Unlock()
 	defer p.wg.Done()
 
+	log.Printf("Stopping server %s", p)
+
 	if !p.running {
 		log.Printf("Server %s is not running", p)
 		return nil
 	}
+	p.running = false
 
-	if p.stopping {
-		log.Printf("Server %s is already stopping", p)
-		return nil
-	}
-
-	log.Printf("Stopping server %s", p)
-	p.stopping = true
-
-	if p.Client != nil {
+	if p.client != nil {
 		log.Printf("Closing client connection to %s", p)
-		if err := p.Client.Close(); err != nil {
+		if err := p.client.Close(); err != nil {
 			log.Printf("failed closing client connection to %s: %v", p, err)
 		}
 	}
+	p.client = nil
 
 	// Check if the process is still alive
 	if p.cmd.ProcessState != nil && p.cmd.ProcessState.Exited() {
@@ -156,12 +142,6 @@ func (p *Process) cmdArgs() []string {
 	return []string{"bundle", "exec", "gruf", "--host", p.Addr, "--health-check", "--backtrace-on-error"}
 }
 
-func (p *Process) initGrpcClient() error {
-	client, err := grpc.NewClient(p.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithCodec(codec.Codec()))
-	p.Client = client
-	return err
-}
-
 func (p *Process) waitShoutdown() {
 	<-p.ctx.Done()
 
@@ -178,7 +158,7 @@ func (p *Process) waitCmdDone() {
 		log.Printf("Server %s exited normally", p)
 	}
 
-	if p.stopping {
+	if !p.running {
 		p.cmdDoneChan <- err
 		close(p.cmdDoneChan)
 		return
@@ -192,4 +172,22 @@ func (p *Process) waitCmdDone() {
 	if err := p.Start(); err != nil {
 		log.Printf("Failed to restart server %s: %v", p, err)
 	}
+}
+
+func (p *Process) GetClient() (*grpc.ClientConn, error) {
+	if p.client == nil {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		if p.client == nil {
+			client, err := grpc.NewClient(
+				p.Addr,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithCodec(codec.Codec()))
+			if err != nil {
+				return nil, fmt.Errorf("failed creating new client for server %s: %v", p, err)
+			}
+			p.client = client
+		}
+	}
+	return p.client, nil
 }
