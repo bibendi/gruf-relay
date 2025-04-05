@@ -18,7 +18,6 @@ import (
 )
 
 // TODO:
-// - cleanenv
 // - slog
 // - Testify
 // - Metrics
