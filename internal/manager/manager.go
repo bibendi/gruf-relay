@@ -42,16 +42,3 @@ func (m *Manager) StartAll() error {
 
 	return nil
 }
-
-// func (m *Manager) StopAll() {
-// 	m.mu.Lock()
-// 	defer m.mu.Unlock()
-
-// 	for _, process := range m.Processes {
-// 		if err := process.Stop(); err != nil {
-// 			log.Printf("failed to stop server %s: %v", process, err)
-// 		}
-// 	}
-
-// 	log.Println("Servers stopped")
-// }

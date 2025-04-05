@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -15,11 +16,12 @@ type Server struct {
 	host       string
 	port       int
 	grpcServer *grpc.Server
+	ctx        context.Context
 }
 
 type ServiceHandler func(srv interface{}, stream grpc.ServerStream) error
 
-func NewServer(cfg *config.Config, proxy *proxy.Proxy) *Server {
+func NewServer(ctx context.Context, cfg *config.Config, proxy *proxy.Proxy) *Server {
 	server := grpc.NewServer(
 		grpc.CustomCodec(codec.Codec()),
 		grpc.UnknownServiceHandler(proxy.HandleRequest),
@@ -29,6 +31,7 @@ func NewServer(cfg *config.Config, proxy *proxy.Proxy) *Server {
 		host:       cfg.Host,
 		port:       cfg.Port,
 		grpcServer: server,
+		ctx:        ctx,
 	}
 }
 
@@ -46,9 +49,16 @@ func (s *Server) Start() {
 			log.Fatalf("failed to serve: %v", err)
 		}
 	}()
+
+	go s.waitShoutdown()
 }
 
-func (s *Server) Stop() {
+func (s *Server) waitShoutdown() {
+	<-s.ctx.Done()
+	s.shoutdown()
+}
+
+func (s *Server) shoutdown() {
 	log.Println("Stopping gRPC server")
 	s.grpcServer.GracefulStop()
 }

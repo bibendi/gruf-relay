@@ -39,7 +39,7 @@ func main() {
 	// Initialize Process Manager
 	pm := manager.NewManager(ctx, &wg, cfg)
 
-	// Start Ruby servers
+	// Initialize gRPC processes
 	if err := pm.StartAll(); err != nil {
 		panic(fmt.Sprintf("Failed to start ruby servers: %v", err))
 	}
@@ -55,8 +55,8 @@ func main() {
 	// Initialize gRPC Proxy
 	grpcProxy := proxy.NewProxy(lb)
 
-	// Create gRPC server
-	grpcServer := server.NewServer(cfg, grpcProxy)
+	// Initialize gRPC server
+	grpcServer := server.NewServer(ctx, cfg, grpcProxy)
 	grpcServer.Start()
 
 	// Graceful shutdown
@@ -65,13 +65,7 @@ func main() {
 
 	<-signalCh
 	log.Println("Received termination signal, initiating graceful shutdown...")
-
-	// Stop gRPC server
-	grpcServer.Stop()
-
-	// Stop processes
 	cancel()
 	wg.Wait()
-
 	log.Println("Goodbye!")
 }
