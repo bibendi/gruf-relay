@@ -29,7 +29,6 @@ type Checker struct {
 }
 
 func NewChecker(ctx context.Context, wg *sync.WaitGroup, pm *manager.Manager, cfg *config.Config, lb *loadbalance.RandomBalancer) *Checker {
-	wg.Add(1)
 	return &Checker{
 		pm:           pm,
 		lb:           lb,
@@ -43,9 +42,20 @@ func NewChecker(ctx context.Context, wg *sync.WaitGroup, pm *manager.Manager, cf
 }
 
 func (c *Checker) Start() {
+	c.wg.Add(1)
 	go c.waitCtxDone()
 	go c.run()
 	slog.Info("Health checker started")
+}
+
+func (c *Checker) GetServerState(name string) connectivity.State {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	state, ok := c.serverStates[name]
+	if !ok {
+		return connectivity.Shutdown
+	}
+	return state
 }
 
 func (c *Checker) run() {
@@ -80,7 +90,7 @@ func (c *Checker) checkServer(p *process.Process) {
 	if !p.IsRunning() {
 		c.lb.RemoveProcess(p)
 		c.updateServerState(p.Name, connectivity.Shutdown)
-		slog.Error("Server is not running, state: %s", slog.Any("server", p), slog.Any("state", connectivity.Shutdown))
+		slog.Error("Server is not running", slog.Any("server", p), slog.Any("state", connectivity.Shutdown))
 		return
 	}
 
@@ -127,14 +137,4 @@ func (c *Checker) updateServerState(name string, state connectivity.State) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.serverStates[name] = state
-}
-
-func (c *Checker) GetServerState(name string) connectivity.State {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	state, ok := c.serverStates[name]
-	if !ok {
-		return connectivity.Shutdown
-	}
-	return state
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/bibendi/gruf-relay/internal/config"
@@ -14,15 +15,14 @@ import (
 	"github.com/bibendi/gruf-relay/internal/loadbalance"
 	"github.com/bibendi/gruf-relay/internal/logger"
 	"github.com/bibendi/gruf-relay/internal/manager"
+	"github.com/bibendi/gruf-relay/internal/probes"
 	"github.com/bibendi/gruf-relay/internal/proxy"
 	"github.com/bibendi/gruf-relay/internal/server"
 )
 
 // TODO:
-// - Testify
 // - Metrics
-// - k8s probes
-// - Coverage
+// - Testify
 func main() {
 	log.Println("Starting gRPC Gruf Relay")
 
@@ -38,6 +38,10 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
+
+	// Initialize probes
+	isStarted := &atomic.Value{}
+	isStarted.Store(false)
 
 	// Initialize Process Manager
 	pm := manager.NewManager(ctx, &wg, cfg)
@@ -56,13 +60,19 @@ func main() {
 	hc := healthcheck.NewChecker(ctx, &wg, pm, cfg, lb)
 	hc.Start()
 
+	if cfg.Probes.Enabled {
+		probes := probes.NewProbes(ctx, &wg, cfg.Probes.Port, isStarted, pm, hc)
+		probes.Start()
+	}
+
 	// Initialize gRPC Proxy
 	grpcProxy := proxy.NewProxy(lb)
 
 	// Initialize gRPC server
 	grpcServer := server.NewServer(ctx, cfg, grpcProxy)
 
-	go waitTermination(grpcServer)
+	go handleSignals(grpcServer)
+	isStarted.Store(true)
 
 	if err := grpcServer.Serve(); err != nil {
 		slog.Error("Failed to serve gRPC server", slog.Any("error", err))
@@ -73,7 +83,7 @@ func main() {
 	log.Println("Goodbye!")
 }
 
-func waitTermination(server *server.Server) {
+func handleSignals(server *server.Server) {
 	// Graceful shutdown
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)

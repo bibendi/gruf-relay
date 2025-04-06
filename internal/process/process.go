@@ -25,12 +25,12 @@ type Process struct {
 	cmd         *exec.Cmd
 	mu          sync.Mutex
 	running     bool
+	stopping    bool
 	cmdDoneChan chan error
 	startOnce   sync.Once
 }
 
 func NewProcess(ctx context.Context, wg *sync.WaitGroup, name, addr string) *Process {
-	wg.Add(1)
 	return &Process{
 		Name:        name,
 		Addr:        addr,
@@ -56,7 +56,6 @@ func (p *Process) Start() error {
 
 	p.client = nil
 
-	slog.Info("Starting server", slog.Any("server", p))
 	p.cmd = p.buildCmd()
 	if err := p.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start server %s: %w", p, err)
@@ -65,58 +64,12 @@ func (p *Process) Start() error {
 	p.running = true
 
 	p.startOnce.Do(func() {
-		go p.waitShoutdown()
+		p.wg.Add(1)
+		go p.waitCtxDone()
 	})
 	go p.waitCmdDone()
 
-	return nil
-}
-
-func (p *Process) shoutdown() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	defer p.wg.Done()
-
-	slog.Info("Stopping server", slog.Any("server", p))
-
-	if !p.running {
-		slog.Error("Server is not running", slog.Any("server", p))
-		return nil
-	}
-	p.running = false
-
-	if p.client != nil {
-		slog.Info("Closing client connection", slog.Any("server", p))
-		if err := p.client.Close(); err != nil {
-			slog.Error("Failed to close client connection", slog.Any("server", p), slog.Any("error", err))
-		}
-	}
-	p.client = nil
-
-	// Check if the process is still alive
-	if p.cmd.ProcessState != nil && p.cmd.ProcessState.Exited() {
-		slog.Error("Server is already exited", slog.Any("server", p))
-		return nil
-	}
-
-	// Send SIGTERM
-	if err := p.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		slog.Error("Failed to send SIGTERM to server", slog.Any("server", p), slog.Any("error", err))
-		if err := p.cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("failed to kill server %s: %w", p, err)
-		}
-	}
-
-	select {
-	case <-p.cmdDoneChan:
-		slog.Info("Server has stopped", slog.Any("server", p))
-	case <-time.After(5 * time.Second):
-		slog.Error("Timeout waiting for server to exit, sending SIGKILL", slog.Any("server", p))
-		if err := p.cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("failed to kill server %s: %w", p, err)
-		}
-	}
-
+	slog.Info("Server started", slog.Any("server", p))
 	return nil
 }
 
@@ -124,55 +77,6 @@ func (p *Process) IsRunning() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.running
-}
-
-func (p *Process) buildCmd() *exec.Cmd {
-	args := p.cmdArgs()
-	cmd := exec.Command(args[0], args[1:]...)
-	// Allow to exec programs in the current directory
-	if errors.Is(cmd.Err, exec.ErrDot) {
-		cmd.Err = nil
-	}
-
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd
-}
-
-func (p *Process) cmdArgs() []string {
-	return []string{"bundle", "exec", "gruf", "--host", p.Addr, "--health-check", "--backtrace-on-error"}
-}
-
-func (p *Process) waitShoutdown() {
-	<-p.ctx.Done()
-
-	if err := p.shoutdown(); err != nil {
-		slog.Error("Failed to shutdown server", slog.Any("server", p), slog.Any("error", err))
-	}
-}
-
-func (p *Process) waitCmdDone() {
-	err := p.cmd.Wait()
-	if err != nil {
-		slog.Error("Server exited unexpectedly", slog.Any("server", p), slog.Any("error", err))
-	} else {
-		slog.Info("Server exited normally", slog.Any("server", p))
-	}
-
-	if !p.running {
-		p.cmdDoneChan <- err
-		close(p.cmdDoneChan)
-		return
-	}
-
-	p.mu.Lock()
-	p.running = false
-	p.mu.Unlock()
-	time.Sleep(2 * time.Second)
-
-	if err := p.Start(); err != nil {
-		slog.Error("Failed to restart server", slog.Any("server", p), slog.Any("error", err))
-	}
 }
 
 func (p *Process) GetClient() (*grpc.ClientConn, error) {
@@ -191,4 +95,106 @@ func (p *Process) GetClient() (*grpc.ClientConn, error) {
 		}
 	}
 	return p.client, nil
+}
+
+func (p *Process) shoutdown() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	defer p.wg.Done()
+
+	slog.Info("Stopping server", slog.Any("server", p))
+	p.stopping = true
+
+	if p.client != nil {
+		slog.Info("Closing client connection", slog.Any("server", p))
+		if err := p.client.Close(); err != nil {
+			slog.Error("Failed to close client connection", slog.Any("server", p), slog.Any("error", err))
+		}
+	}
+	p.client = nil
+
+	if !p.running {
+		return errors.New("server is not running")
+	}
+	p.running = false
+
+	// Check if the process is still alive
+	if p.cmd.ProcessState != nil && p.cmd.ProcessState.Exited() {
+		slog.Error("Server is already exited", slog.Any("server", p))
+		return nil
+	}
+
+	// Send SIGTERM
+	slog.Debug("Sending SIGTERM to server", slog.Any("server", p))
+	if err := p.cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		slog.Error("Failed to send SIGTERM to server", slog.Any("server", p), slog.Any("error", err))
+		if err := p.cmd.Process.Kill(); err != nil {
+			return fmt.Errorf("failed to kill server %s: %w", p, err)
+		}
+	}
+
+	select {
+	case <-p.cmdDoneChan:
+		slog.Info("Server stopped", slog.Any("server", p))
+	case <-time.After(5 * time.Second):
+		slog.Error("Timeout waiting for server to exit, sending SIGKILL", slog.Any("server", p))
+		if err := p.cmd.Process.Kill(); err != nil {
+			return fmt.Errorf("failed to kill server %s: %w", p, err)
+		}
+	}
+
+	return nil
+}
+
+func (p *Process) waitCtxDone() {
+	<-p.ctx.Done()
+
+	if err := p.shoutdown(); err != nil {
+		slog.Error("Failed to shutdown server", slog.Any("server", p), slog.Any("error", err))
+	}
+}
+
+func (p *Process) waitCmdDone() {
+	err := p.cmd.Wait()
+	if err != nil {
+		slog.Error("Server exited unexpectedly", slog.Any("server", p), slog.Any("error", err))
+	} else {
+		slog.Info("Server exited normally", slog.Any("server", p))
+	}
+
+	if p.stopping {
+		slog.Debug("Closing cmdDoneChan", slog.Any("server", p))
+		p.cmdDoneChan <- err
+		close(p.cmdDoneChan)
+		slog.Debug("cmdDoneChan closed", slog.Any("server", p))
+		return
+	}
+
+	slog.Debug("Setting server as not running", slog.Any("server", p))
+	p.mu.Lock()
+	p.running = false
+	p.mu.Unlock()
+
+	time.Sleep(2 * time.Second)
+
+	if err := p.Start(); err != nil {
+		slog.Error("Failed to restart server", slog.Any("server", p), slog.Any("error", err))
+	}
+}
+
+func (p *Process) buildCmd() *exec.Cmd {
+	args := p.cmdArgs()
+	cmd := exec.Command(args[0], args[1:]...)
+	// Allow to exec programs in the current directory
+	if errors.Is(cmd.Err, exec.ErrDot) {
+		cmd.Err = nil
+	}
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd
+}
+
+func (p *Process) cmdArgs() []string {
+	return []string{"bundle", "exec", "gruf", "--host", p.Addr, "--health-check", "--backtrace-on-error"}
 }

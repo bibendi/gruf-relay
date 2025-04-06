@@ -5,3 +5,6 @@ workers:
 log_level: debug
 log_format: text
 health_check_interval: 5s
+probes:
+  enabled: true
+  port: 5555

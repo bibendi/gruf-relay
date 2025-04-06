@@ -24,8 +24,6 @@ type RandomBalancer struct {
 }
 
 func NewRandomBalancer(ctx context.Context, wg *sync.WaitGroup) *RandomBalancer {
-	wg.Add(1)
-
 	rb := &RandomBalancer{
 		addChan:      make(chan *process.Process),
 		removeChan:   make(chan *process.Process),
@@ -39,9 +37,10 @@ func NewRandomBalancer(ctx context.Context, wg *sync.WaitGroup) *RandomBalancer 
 }
 
 func (rb *RandomBalancer) Start() {
-	slog.Info("Starting to balance processes")
+	rb.wg.Add(1)
 	go rb.waitCtxDone()
 	go rb.balance()
+	slog.Info("Load balancer started")
 }
 
 func (rb *RandomBalancer) AddProcess(p *process.Process) {
