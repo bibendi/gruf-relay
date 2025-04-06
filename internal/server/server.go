@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 
 	"github.com/bibendi/gruf-relay/internal/codec"
@@ -35,30 +35,23 @@ func NewServer(ctx context.Context, cfg *config.Config, proxy *proxy.Proxy) *Ser
 	}
 }
 
-func (s *Server) Start() {
+func (s *Server) Serve() error {
 	addr := fmt.Sprintf("%s:%d", s.host, s.port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		return fmt.Errorf("failed to listen: %v", err)
 	}
 
-	log.Printf("Starting gRPC server on %s", addr)
+	slog.Info("Starting gRPC server", slog.String("addr", addr))
 
-	go func() {
-		if err := s.grpcServer.Serve(lis); err != nil {
-			log.Fatalf("failed to serve: %v", err)
-		}
-	}()
+	if err := s.grpcServer.Serve(lis); err != nil {
+		return fmt.Errorf("gRPC server has failed: %v", err)
+	}
 
-	go s.waitShoutdown()
+	return nil
 }
 
-func (s *Server) waitShoutdown() {
-	<-s.ctx.Done()
-	s.shoutdown()
-}
-
-func (s *Server) shoutdown() {
-	log.Println("Stopping gRPC server")
+func (s *Server) Shoutdown() {
+	slog.Info("Stopping gRPC server")
 	s.grpcServer.GracefulStop()
 }

@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
+	"os"
 	"os/exec"
 	"sync"
 	"syscall"
@@ -49,13 +50,13 @@ func (p *Process) Start() error {
 	defer p.mu.Unlock()
 
 	if p.running {
-		log.Printf("Server %s is already running", p)
+		slog.Error("Server is already running", slog.Any("server", p))
 		return nil
 	}
 
 	p.client = nil
 
-	log.Printf("Starting server %s", p)
+	slog.Info("Starting server", slog.Any("server", p))
 	p.cmd = p.buildCmd()
 	if err := p.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start server %s: %w", p, err)
@@ -76,31 +77,31 @@ func (p *Process) shoutdown() error {
 	defer p.mu.Unlock()
 	defer p.wg.Done()
 
-	log.Printf("Stopping server %s", p)
+	slog.Info("Stopping server", slog.Any("server", p))
 
 	if !p.running {
-		log.Printf("Server %s is not running", p)
+		slog.Error("Server is not running", slog.Any("server", p))
 		return nil
 	}
 	p.running = false
 
 	if p.client != nil {
-		log.Printf("Closing client connection to %s", p)
+		slog.Info("Closing client connection", slog.Any("server", p))
 		if err := p.client.Close(); err != nil {
-			log.Printf("failed closing client connection to %s: %v", p, err)
+			slog.Error("Failed to close client connection", slog.Any("server", p), slog.Any("error", err))
 		}
 	}
 	p.client = nil
 
 	// Check if the process is still alive
 	if p.cmd.ProcessState != nil && p.cmd.ProcessState.Exited() {
-		log.Printf("Server %s already exited", p)
+		slog.Error("Server is already exited", slog.Any("server", p))
 		return nil
 	}
 
 	// Send SIGTERM
 	if err := p.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		log.Printf("Failed to send SIGTERM to server %s: %v", p, err)
+		slog.Error("Failed to send SIGTERM to server", slog.Any("server", p), slog.Any("error", err))
 		if err := p.cmd.Process.Kill(); err != nil {
 			return fmt.Errorf("failed to kill server %s: %w", p, err)
 		}
@@ -108,9 +109,9 @@ func (p *Process) shoutdown() error {
 
 	select {
 	case <-p.cmdDoneChan:
-		log.Printf("Server %s has stopped", p)
+		slog.Info("Server has stopped", slog.Any("server", p))
 	case <-time.After(5 * time.Second):
-		log.Printf("Timeout waiting for server %s to exit, sending SIGKILL", p)
+		slog.Error("Timeout waiting for server to exit, sending SIGKILL", slog.Any("server", p))
 		if err := p.cmd.Process.Kill(); err != nil {
 			return fmt.Errorf("failed to kill server %s: %w", p, err)
 		}
@@ -133,8 +134,8 @@ func (p *Process) buildCmd() *exec.Cmd {
 		cmd.Err = nil
 	}
 
-	cmd.Stdout = log.Writer()
-	cmd.Stderr = log.Writer()
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	return cmd
 }
 
@@ -146,16 +147,16 @@ func (p *Process) waitShoutdown() {
 	<-p.ctx.Done()
 
 	if err := p.shoutdown(); err != nil {
-		log.Printf("Failed to shutdown server %s: %v", p, err)
+		slog.Error("Failed to shutdown server", slog.Any("server", p), slog.Any("error", err))
 	}
 }
 
 func (p *Process) waitCmdDone() {
 	err := p.cmd.Wait()
 	if err != nil {
-		log.Printf("Server %s exited unexpectedly with error: %v", p, err)
+		slog.Error("Server exited unexpectedly", slog.Any("server", p), slog.Any("error", err))
 	} else {
-		log.Printf("Server %s exited normally", p)
+		slog.Info("Server exited normally", slog.Any("server", p))
 	}
 
 	if !p.running {
@@ -170,7 +171,7 @@ func (p *Process) waitCmdDone() {
 	time.Sleep(2 * time.Second)
 
 	if err := p.Start(); err != nil {
-		log.Printf("Failed to restart server %s: %v", p, err)
+		slog.Error("Failed to restart server", slog.Any("server", p), slog.Any("error", err))
 	}
 }
 

@@ -3,7 +3,7 @@ package healthcheck
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -45,7 +45,7 @@ func NewChecker(ctx context.Context, wg *sync.WaitGroup, pm *manager.Manager, cf
 func (c *Checker) Start() {
 	go c.waitCtxDone()
 	go c.run()
-	log.Println("Health checker started")
+	slog.Info("Health checker started")
 }
 
 func (c *Checker) run() {
@@ -57,7 +57,7 @@ func (c *Checker) run() {
 		case <-ticker.C:
 			c.checkAll()
 		case <-c.stopChan:
-			log.Println("Health checker stopped")
+			slog.Info("Health checker stopped")
 			c.wg.Done()
 			return
 		}
@@ -80,7 +80,7 @@ func (c *Checker) checkServer(p *process.Process) {
 	if !p.IsRunning() {
 		c.lb.RemoveProcess(p)
 		c.updateServerState(p.Name, connectivity.Shutdown)
-		log.Printf("Server %s is not running, state: %s", p, connectivity.Shutdown)
+		slog.Error("Server is not running, state: %s", slog.Any("server", p), slog.Any("state", connectivity.Shutdown))
 		return
 	}
 
@@ -88,7 +88,7 @@ func (c *Checker) checkServer(p *process.Process) {
 	if err != nil {
 		c.lb.RemoveProcess(p)
 		c.updateServerState(p.Name, connectivity.TransientFailure)
-		log.Printf("Failed to dial server %s: %v, state: %s", p, err, connectivity.TransientFailure)
+		slog.Error("Failed to dial server", slog.Any("server", p), slog.Any("error", err), slog.Any("state", connectivity.TransientFailure))
 		return
 	}
 	defer conn.Close()
@@ -102,7 +102,7 @@ func (c *Checker) checkServer(p *process.Process) {
 	if err != nil {
 		c.lb.RemoveProcess(p)
 		c.updateServerState(p.Name, connectivity.TransientFailure)
-		log.Printf("Health check failed for server %s: %v, state: %s", p, err, connectivity.TransientFailure)
+		slog.Error("Health check failed for server", slog.Any("server", p), slog.Any("error", err), slog.Any("state", connectivity.TransientFailure))
 		return
 	}
 
@@ -120,7 +120,7 @@ func (c *Checker) checkServer(p *process.Process) {
 	}
 
 	c.updateServerState(p.Name, state)
-	log.Printf("Server %s health check status: %s, state: %s", p, resp.Status, state)
+	slog.Info("Server is healthy", slog.Any("server", p), slog.Any("status", resp.Status), slog.Any("state", state))
 }
 
 func (c *Checker) updateServerState(name string, state connectivity.State) {

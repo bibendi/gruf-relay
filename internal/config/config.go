@@ -9,6 +9,8 @@ import (
 )
 
 type Config struct {
+	LogLevel            string        `yaml:"log_level" env:"LOG_LEVEL" env-default:"debug"`
+	LogFormat           string        `yaml:"log_format" env:"LOG_FORMAT" env-default:"json"`
 	Host                string        `yaml:"host" env:"HOST" env-default:"0.0.0.0"`
 	Port                int           `yaml:"port" env:"PORT" env-default:"8080"`
 	HealthCheckInterval time.Duration `yaml:"health_check_interval" env:"HEALTH_CHECK_INTERVAL" env-default:"5s"`

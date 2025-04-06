@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"sync"
@@ -12,13 +12,13 @@ import (
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/healthcheck"
 	"github.com/bibendi/gruf-relay/internal/loadbalance"
+	"github.com/bibendi/gruf-relay/internal/logger"
 	"github.com/bibendi/gruf-relay/internal/manager"
 	"github.com/bibendi/gruf-relay/internal/proxy"
 	"github.com/bibendi/gruf-relay/internal/server"
 )
 
 // TODO:
-// - slog
 // - Testify
 // - Metrics
 // - k8s probes
@@ -29,8 +29,12 @@ func main() {
 	// Load configuration
 	cfg, err := config.LoadConfig("config/gruf-relay.yml")
 	if err != nil {
-		panic(fmt.Sprintf("Failed to load config: %v", err))
+		slog.Error("Failed to load config", slog.Any("error", err))
+		os.Exit(1)
 	}
+
+	// Initialize Logger
+	logger.InitLogger(cfg.LogLevel, cfg.LogFormat)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
@@ -40,7 +44,8 @@ func main() {
 
 	// Initialize gRPC processes
 	if err := pm.StartAll(); err != nil {
-		panic(fmt.Sprintf("Failed to start ruby servers: %v", err))
+		slog.Error("Failed to start servers", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	// Initialize Load Balancer
@@ -56,15 +61,24 @@ func main() {
 
 	// Initialize gRPC server
 	grpcServer := server.NewServer(ctx, cfg, grpcProxy)
-	grpcServer.Start()
 
+	go waitTermination(grpcServer)
+
+	if err := grpcServer.Serve(); err != nil {
+		slog.Error("Failed to serve gRPC server", slog.Any("error", err))
+	}
+
+	cancel()
+	wg.Wait()
+	log.Println("Goodbye!")
+}
+
+func waitTermination(server *server.Server) {
 	// Graceful shutdown
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	<-signalCh
-	log.Println("Received termination signal, initiating graceful shutdown...")
-	cancel()
-	wg.Wait()
-	log.Println("Goodbye!")
+	slog.Info("Received termination signal, initiating graceful shutdown...")
+	server.Shoutdown()
 }

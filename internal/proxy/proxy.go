@@ -3,7 +3,7 @@ package proxy
 import (
 	"context"
 	"io"
-	"log"
+	"log/slog"
 	"time"
 
 	"google.golang.org/grpc"
@@ -43,16 +43,17 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 	if !ok {
 		return status.Error(codes.Internal, "method unknown")
 	}
-	log.Printf("Hangle gRPC request method name: %s", fullMethod)
+	slog.Info("Handle gRPC request", slog.String("method", fullMethod))
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, 1000*time.Second)
 	defer cancel()
 
 	md, _ := metadata.FromIncomingContext(ctx)
 	outCtx := metadata.NewOutgoingContext(timeoutCtx, md.Copy())
-	log.Printf("Metadata: %+v\n", md)
+	slog.Debug("Request metadata", slog.Any("metadata", md))
 
 	process := p.Balancer.Next()
+	slog.Debug("Selected server", slog.Any("server", process))
 	if process == nil {
 		return status.Error(codes.Unavailable, "server unavailable")
 	}
@@ -69,38 +70,38 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 		return status.Errorf(codes.Unavailable, "failed creating downstream: %v", err)
 	}
 
-	log.Printf("Start proxying %s to %s", fullMethod, process.Name)
+	slog.Info("Proxying request", slog.String("method", fullMethod), slog.Any("server", process))
 
 	upstreamErrChan := proxyRequest(upstream, downstream)
 	downstreamErrChan := proxyResponse(downstream, upstream)
 
 	for {
 		select {
-		case upstreamErr, ok := <-upstreamErrChan:
+		case err, ok := <-upstreamErrChan:
 			if !ok {
-				upstreamErr = nil
+				upstreamErrChan = nil
 				continue
 			}
 
-			if upstreamErr == io.EOF {
+			if err == io.EOF {
 				downstream.CloseSend()
 			} else {
-				return status.Errorf(codes.Internal, "failed proxying request: %v", upstreamErr)
+				return status.Errorf(codes.Internal, "failed proxying request: %v", err)
 			}
-		case downstreamErr, ok := <-downstreamErrChan:
+		case err, ok := <-downstreamErrChan:
 			if !ok {
-				downstreamErr = nil
+				downstreamErrChan = nil
 				continue
 			}
 
 			upstream.SetTrailer(downstream.Trailer())
 
-			if downstreamErr == io.EOF {
-				log.Printf("Finish proxying %s to %s", fullMethod, process.Name)
+			if err == io.EOF {
+				slog.Info("Finish proxying", slog.String("method", fullMethod), slog.Any("server", process))
 				return nil
 			} else {
-				log.Printf("failed proxying response: %v", downstreamErr)
-				return downstreamErr
+				slog.Error("Failed proxy response", slog.Any("server", process), slog.Any("error", err))
+				return err
 			}
 		}
 	}

@@ -2,7 +2,7 @@ package loadbalance
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -39,7 +39,7 @@ func NewRandomBalancer(ctx context.Context, wg *sync.WaitGroup) *RandomBalancer 
 }
 
 func (rb *RandomBalancer) Start() {
-	log.Println("Starting to balance processes")
+	slog.Info("Starting to balance processes")
 	go rb.waitCtxDone()
 	go rb.balance()
 }
@@ -99,7 +99,7 @@ func (rb *RandomBalancer) balance() {
 
 			rb.mu.Unlock()
 		case <-rb.done:
-			log.Println("Stopping load balancer")
+			slog.Info("Stopping load balancer")
 			rb.wg.Done()
 			return
 		}

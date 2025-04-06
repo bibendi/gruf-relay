@@ -3,7 +3,7 @@ package manager
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 
 	"github.com/bibendi/gruf-relay/internal/config"
@@ -38,7 +38,7 @@ func (m *Manager) StartAll() error {
 		}
 	}
 
-	log.Println("Servers started")
+	slog.Info("Servers started", slog.Int("count", len(m.Processes)))
 
 	return nil
 }
