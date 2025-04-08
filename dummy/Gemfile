@@ -17,7 +17,14 @@ gem "solid_queue"
 # Add HTTP asset caching/compression and X-Sendfile acceleration to Puma [https://github.com/basecamp/thruster/]
 gem "thruster", require: false
 
+# gRPC server
 gem "gruf"
+
+# Metrics
+gem "yabeda"
+gem "rack", "< 3" # https://github.com/yabeda-rb/yabeda-prometheus-mmap/issues/11
+gem "yabeda-prometheus-mmap"
+
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
