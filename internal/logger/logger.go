@@ -1,7 +1,7 @@
 package logger
 
 import (
-	"log"
+	"fmt"
 	"log/slog"
 	"os"
 )
@@ -13,10 +13,10 @@ var levelMap = map[string]slog.Level{
 	"error": slog.LevelError,
 }
 
-func InitLogger(level, format string) {
+func NewLogger(level, format string) *slog.Logger {
 	logLevel, ok := levelMap[level]
 	if !ok {
-		log.Fatalf("Invalid log level: %s", level)
+		panic(fmt.Sprintf("Invalid log level: %s", level))
 	}
 
 	handlerOpts := &slog.HandlerOptions{
@@ -30,10 +30,11 @@ func InitLogger(level, format string) {
 	case "text":
 		handler = slog.NewTextHandler(os.Stdout, handlerOpts)
 	default:
-		log.Fatalf("Invalid log format: %s", format)
+		panic(fmt.Sprintf("Invalid log format: %s", format))
 	}
 
 	logger := slog.New(handler)
 	slog.SetDefault(logger)
-	logger.Info("Initializing logger", slog.String("level", level), slog.String("format", format))
+
+	return logger
 }

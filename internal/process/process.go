@@ -19,6 +19,7 @@ import (
 type Process struct {
 	Name        string
 	Addr        string
+	log         *slog.Logger
 	client      *grpc.ClientConn
 	ctx         context.Context
 	wg          *sync.WaitGroup
@@ -30,7 +31,8 @@ type Process struct {
 	startOnce   sync.Once
 }
 
-func NewProcess(ctx context.Context, wg *sync.WaitGroup, name, addr string) *Process {
+func NewProcess(ctx context.Context, wg *sync.WaitGroup, logger *slog.Logger, name, addr string) *Process {
+	log := logger.With(slog.String("process", name))
 	return &Process{
 		Name:        name,
 		Addr:        addr,
@@ -38,11 +40,12 @@ func NewProcess(ctx context.Context, wg *sync.WaitGroup, name, addr string) *Pro
 		wg:          wg,
 		cmdDoneChan: make(chan error, 1),
 		startOnce:   sync.Once{},
+		log:         log,
 	}
 }
 
 func (p *Process) String() string {
-	return fmt.Sprintf("%s (%s)", p.Name, p.Addr)
+	return p.Name
 }
 
 func (p *Process) Start() error {
@@ -50,7 +53,7 @@ func (p *Process) Start() error {
 	defer p.mu.Unlock()
 
 	if p.running {
-		slog.Error("Server is already running", slog.Any("server", p))
+		p.log.Error("Server is already running")
 		return nil
 	}
 
@@ -69,7 +72,7 @@ func (p *Process) Start() error {
 	})
 	go p.waitCmdDone()
 
-	slog.Info("Server started", slog.Any("server", p))
+	p.log.Info("Server started")
 	return nil
 }
 
@@ -102,13 +105,13 @@ func (p *Process) shoutdown() error {
 	defer p.mu.Unlock()
 	defer p.wg.Done()
 
-	slog.Info("Stopping server", slog.Any("server", p))
+	p.log.Info("Stopping server")
 	p.stopping = true
 
 	if p.client != nil {
-		slog.Info("Closing client connection", slog.Any("server", p))
+		p.log.Info("Closing client connection")
 		if err := p.client.Close(); err != nil {
-			slog.Error("Failed to close client connection", slog.Any("server", p), slog.Any("error", err))
+			p.log.Error("Failed to close client connection", slog.Any("error", err))
 		}
 	}
 	p.client = nil
@@ -120,14 +123,14 @@ func (p *Process) shoutdown() error {
 
 	// Check if the process is still alive
 	if p.cmd.ProcessState != nil && p.cmd.ProcessState.Exited() {
-		slog.Error("Server is already exited", slog.Any("server", p))
+		p.log.Error("Server is already exited")
 		return nil
 	}
 
 	// Send SIGTERM
-	slog.Debug("Sending SIGTERM to server", slog.Any("server", p))
+	p.log.Debug("Sending SIGTERM to server")
 	if err := p.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		slog.Error("Failed to send SIGTERM to server", slog.Any("server", p), slog.Any("error", err))
+		p.log.Error("Failed to send SIGTERM to server", slog.Any("error", err))
 		if err := p.cmd.Process.Kill(); err != nil {
 			return fmt.Errorf("failed to kill server %s: %w", p, err)
 		}
@@ -135,9 +138,9 @@ func (p *Process) shoutdown() error {
 
 	select {
 	case <-p.cmdDoneChan:
-		slog.Info("Server stopped", slog.Any("server", p))
+		p.log.Info("Server stopped")
 	case <-time.After(5 * time.Second):
-		slog.Error("Timeout waiting for server to exit, sending SIGKILL", slog.Any("server", p))
+		p.log.Error("Timeout waiting for server to exit, sending SIGKILL")
 		if err := p.cmd.Process.Kill(); err != nil {
 			return fmt.Errorf("failed to kill server %s: %w", p, err)
 		}
@@ -150,27 +153,27 @@ func (p *Process) waitCtxDone() {
 	<-p.ctx.Done()
 
 	if err := p.shoutdown(); err != nil {
-		slog.Error("Failed to shutdown server", slog.Any("server", p), slog.Any("error", err))
+		p.log.Error("Failed to shutdown server", slog.Any("error", err))
 	}
 }
 
 func (p *Process) waitCmdDone() {
 	err := p.cmd.Wait()
 	if err != nil {
-		slog.Error("Server exited unexpectedly", slog.Any("server", p), slog.Any("error", err))
+		p.log.Error("Server exited unexpectedly", slog.Any("error", err))
 	} else {
-		slog.Info("Server exited normally", slog.Any("server", p))
+		p.log.Info("Server exited normally")
 	}
 
 	if p.stopping {
-		slog.Debug("Closing cmdDoneChan", slog.Any("server", p))
+		p.log.Debug("Closing cmdDoneChan")
 		p.cmdDoneChan <- err
 		close(p.cmdDoneChan)
-		slog.Debug("cmdDoneChan closed", slog.Any("server", p))
+		p.log.Debug("cmdDoneChan closed")
 		return
 	}
 
-	slog.Debug("Setting server as not running", slog.Any("server", p))
+	p.log.Debug("Setting server as not running")
 	p.mu.Lock()
 	p.running = false
 	p.mu.Unlock()
@@ -178,7 +181,7 @@ func (p *Process) waitCmdDone() {
 	time.Sleep(2 * time.Second)
 
 	if err := p.Start(); err != nil {
-		slog.Error("Failed to restart server", slog.Any("server", p), slog.Any("error", err))
+		p.log.Error("Failed to restart server", slog.Any("error", err))
 	}
 }
 

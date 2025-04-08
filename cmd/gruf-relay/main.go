@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -24,17 +24,18 @@ import (
 // - Metrics
 // - Testify
 func main() {
-	log.Println("Starting gRPC Gruf Relay")
-
 	// Load configuration
 	cfg, err := config.LoadConfig("config/gruf-relay.yml")
 	if err != nil {
-		slog.Error("Failed to load config", slog.Any("error", err))
-		os.Exit(1)
+		panic(fmt.Sprintf("Failed to load config: %s", err))
 	}
 
 	// Initialize Logger
-	logger.InitLogger(cfg.LogLevel, cfg.LogFormat)
+	log := logger.NewLogger(cfg.LogLevel, cfg.LogFormat)
+
+	log.Info("Starting gRPC Relay")
+	log.Debug("Configuration loaded")
+	log.Info("Logger initialized", slog.String("level", cfg.LogLevel), slog.String("format", cfg.LogFormat))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
@@ -44,51 +45,51 @@ func main() {
 	isStarted.Store(false)
 
 	// Initialize Process Manager
-	pm := manager.NewManager(ctx, &wg, cfg)
+	pm := manager.NewManager(ctx, &wg, log, cfg)
 
 	// Initialize gRPC processes
 	if err := pm.StartAll(); err != nil {
-		slog.Error("Failed to start servers", slog.Any("error", err))
+		log.Error("Failed to start servers", slog.Any("error", err))
 		os.Exit(1)
 	}
 
 	// Initialize Load Balancer
-	lb := loadbalance.NewRandomBalancer(ctx, &wg)
+	lb := loadbalance.NewRandomBalancer(ctx, &wg, log)
 	lb.Start()
 
 	// Initialize Health Checker
-	hc := healthcheck.NewChecker(ctx, &wg, pm, cfg, lb)
+	hc := healthcheck.NewChecker(ctx, &wg, log, pm, cfg, lb)
 	hc.Start()
 
 	if cfg.Probes.Enabled {
-		probes := probes.NewProbes(ctx, &wg, cfg.Probes.Port, isStarted, pm, hc)
+		probes := probes.NewProbes(ctx, &wg, log, cfg.Probes.Port, isStarted, pm, hc)
 		probes.Start()
 	}
 
 	// Initialize gRPC Proxy
-	grpcProxy := proxy.NewProxy(lb)
+	grpcProxy := proxy.NewProxy(log, lb)
 
 	// Initialize gRPC server
-	grpcServer := server.NewServer(ctx, cfg, grpcProxy)
+	grpcServer := server.NewServer(ctx, log, cfg, grpcProxy)
 
-	go handleSignals(grpcServer)
+	go handleSignals(grpcServer, log)
 	isStarted.Store(true)
 
 	if err := grpcServer.Serve(); err != nil {
-		slog.Error("Failed to serve gRPC server", slog.Any("error", err))
+		log.Error("Failed to serve gRPC server", slog.Any("error", err))
 	}
 
 	cancel()
 	wg.Wait()
-	log.Println("Goodbye!")
+	log.Info("Goodbye!")
 }
 
-func handleSignals(server *server.Server) {
+func handleSignals(server *server.Server, log *slog.Logger) {
 	// Graceful shutdown
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	<-signalCh
-	slog.Info("Received termination signal, initiating graceful shutdown...")
+	log.Info("Received termination signal, initiating graceful shutdown...")
 	server.Shoutdown()
 }

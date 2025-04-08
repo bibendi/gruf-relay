@@ -21,9 +21,10 @@ type RandomBalancer struct {
 	mu           sync.Mutex
 	ctx          context.Context
 	wg           *sync.WaitGroup
+	log          *slog.Logger
 }
 
-func NewRandomBalancer(ctx context.Context, wg *sync.WaitGroup) *RandomBalancer {
+func NewRandomBalancer(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger) *RandomBalancer {
 	rb := &RandomBalancer{
 		addChan:      make(chan *process.Process),
 		removeChan:   make(chan *process.Process),
@@ -31,6 +32,7 @@ func NewRandomBalancer(ctx context.Context, wg *sync.WaitGroup) *RandomBalancer 
 		processNames: make(map[string]bool),
 		ctx:          ctx,
 		wg:           wg,
+		log:          log,
 	}
 	rb.processes.Store([]*process.Process{})
 	return rb
@@ -40,7 +42,7 @@ func (rb *RandomBalancer) Start() {
 	rb.wg.Add(1)
 	go rb.waitCtxDone()
 	go rb.balance()
-	slog.Info("Load balancer started")
+	rb.log.Info("Load balancer started")
 }
 
 func (rb *RandomBalancer) AddProcess(p *process.Process) {
@@ -98,7 +100,7 @@ func (rb *RandomBalancer) balance() {
 
 			rb.mu.Unlock()
 		case <-rb.done:
-			slog.Info("Stopping load balancer")
+			rb.log.Info("Stopping load balancer")
 			rb.wg.Done()
 			return
 		}

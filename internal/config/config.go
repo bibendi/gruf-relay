@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
@@ -34,8 +33,6 @@ func LoadConfig(filename string) (*Config, error) {
 	if err := config.validateConfig(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
-
-	log.Printf("Configuration loaded: %+v", config)
 
 	return &config, nil
 }

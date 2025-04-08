@@ -13,19 +13,23 @@ import (
 type Manager struct {
 	Processes map[string]*process.Process
 	mu        sync.Mutex
+	log       *slog.Logger
 }
 
-func NewManager(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config) *Manager {
+func NewManager(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, cfg *config.Config) *Manager {
 	processes := make(map[string]*process.Process, cfg.Workers.Count)
 
 	for i := range cfg.Workers.Count {
 		name := fmt.Sprintf("worker-%d", i+1)
 		port := cfg.Workers.StartPort + i
 		addr := fmt.Sprintf("0.0.0.0:%d", port)
-		processes[name] = process.NewProcess(ctx, wg, name, addr)
+		processes[name] = process.NewProcess(ctx, wg, log, name, addr)
 	}
 
-	return &Manager{Processes: processes}
+	return &Manager{
+		Processes: processes,
+		log:       log,
+	}
 }
 
 func (m *Manager) StartAll() error {
@@ -38,7 +42,7 @@ func (m *Manager) StartAll() error {
 		}
 	}
 
-	slog.Info("Servers started", slog.Int("count", len(m.Processes)))
+	m.log.Info("Servers started", slog.Int("count", len(m.Processes)))
 
 	return nil
 }

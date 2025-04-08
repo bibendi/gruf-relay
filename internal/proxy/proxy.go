@@ -28,11 +28,13 @@ type Balancer interface {
 
 type Proxy struct {
 	Balancer Balancer
+	log      *slog.Logger
 }
 
-func NewProxy(balancer Balancer) *Proxy {
+func NewProxy(log *slog.Logger, balancer Balancer) *Proxy {
 	return &Proxy{
 		Balancer: balancer,
+		log:      log,
 	}
 }
 
@@ -43,17 +45,17 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 	if !ok {
 		return status.Error(codes.Internal, "method unknown")
 	}
-	slog.Info("Handle gRPC request", slog.String("method", fullMethod))
+	p.log.Info("Handle gRPC request", slog.String("method", fullMethod))
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, 1000*time.Second)
 	defer cancel()
 
 	md, _ := metadata.FromIncomingContext(ctx)
 	outCtx := metadata.NewOutgoingContext(timeoutCtx, md.Copy())
-	slog.Debug("Request metadata", slog.Any("metadata", md))
+	p.log.Debug("Request metadata", slog.Any("metadata", md))
 
 	process := p.Balancer.Next()
-	slog.Debug("Selected server", slog.Any("server", process))
+	p.log.Debug("Selected server", slog.Any("server", process))
 	if process == nil {
 		return status.Error(codes.Unavailable, "server unavailable")
 	}
@@ -70,7 +72,7 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 		return status.Errorf(codes.Unavailable, "failed creating downstream: %v", err)
 	}
 
-	slog.Info("Proxying request", slog.String("method", fullMethod), slog.Any("server", process))
+	p.log.Info("Proxying request", slog.String("method", fullMethod), slog.Any("server", process))
 
 	upstreamErrChan := proxyRequest(upstream, downstream)
 	downstreamErrChan := proxyResponse(downstream, upstream)
@@ -97,10 +99,10 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 			upstream.SetTrailer(downstream.Trailer())
 
 			if err == io.EOF {
-				slog.Info("Finish proxying", slog.String("method", fullMethod), slog.Any("server", process))
+				p.log.Info("Finish proxying", slog.String("method", fullMethod), slog.Any("server", process))
 				return nil
 			} else {
-				slog.Error("Failed proxy response", slog.Any("server", process), slog.Any("error", err))
+				p.log.Error("Failed proxy response", slog.Any("server", process), slog.Any("error", err))
 				return err
 			}
 		}
