@@ -2,9 +2,15 @@ host: 0.0.0.0
 port: 8080
 workers:
   count: 2
+  start_port: 9000
+  metrics_path: /metrics
 log_level: debug
 log_format: text
 health_check_interval: 5s
 probes:
   enabled: true
   port: 5555
+metrics:
+  enabled: true
+  port: 9394
+  path: /metrics

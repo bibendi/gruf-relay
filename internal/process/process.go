@@ -19,6 +19,10 @@ import (
 type Process struct {
 	Name        string
 	Addr        string
+	MetricsAddr string
+	port        int
+	metricsPort int
+	metricsPath string
 	log         *slog.Logger
 	client      *grpc.ClientConn
 	ctx         context.Context
@@ -31,11 +35,15 @@ type Process struct {
 	startOnce   sync.Once
 }
 
-func NewProcess(ctx context.Context, wg *sync.WaitGroup, logger *slog.Logger, name, addr string) *Process {
+func NewProcess(ctx context.Context, wg *sync.WaitGroup, logger *slog.Logger, name string, port, metricsPort int, metricsPath string) *Process {
 	log := logger.With(slog.String("process", name))
 	return &Process{
 		Name:        name,
-		Addr:        addr,
+		Addr:        fmt.Sprintf("0.0.0.0:%d", port),
+		MetricsAddr: fmt.Sprintf("0.0.0.0:%d/%s", metricsPort, metricsPath),
+		port:        port,
+		metricsPort: metricsPort,
+		metricsPath: metricsPath,
 		ctx:         ctx,
 		wg:          wg,
 		cmdDoneChan: make(chan error, 1),
@@ -195,6 +203,9 @@ func (p *Process) buildCmd() *exec.Cmd {
 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, fmt.Sprintf("PROMETHEUS_EXPORTER_PORT=%d", p.metricsPort))
+	cmd.Env = append(cmd.Env, fmt.Sprintf("PROMETHEUS_EXPORTER_PATH=%s", p.metricsPath))
 	return cmd
 }
 

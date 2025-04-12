@@ -15,13 +15,13 @@ import (
 	"github.com/bibendi/gruf-relay/internal/loadbalance"
 	"github.com/bibendi/gruf-relay/internal/logger"
 	"github.com/bibendi/gruf-relay/internal/manager"
+	"github.com/bibendi/gruf-relay/internal/metrics"
 	"github.com/bibendi/gruf-relay/internal/probes"
 	"github.com/bibendi/gruf-relay/internal/proxy"
 	"github.com/bibendi/gruf-relay/internal/server"
 )
 
 // TODO:
-// - Metrics
 // - Testify
 func main() {
 	// Load configuration
@@ -64,6 +64,15 @@ func main() {
 	if cfg.Probes.Enabled {
 		probes := probes.NewProbes(ctx, &wg, log, cfg.Probes.Port, isStarted, pm, hc)
 		probes.Start()
+	}
+
+	if cfg.Metrics.Enabled {
+		metrics, err := metrics.NewScraper(ctx, &wg, log, pm, cfg.Metrics.Port, cfg.Metrics.Path)
+		if err != nil {
+			log.Error("Failed to create scraper", slog.Any("error", err))
+			os.Exit(1)
+		}
+		go metrics.Start()
 	}
 
 	// Initialize gRPC Proxy

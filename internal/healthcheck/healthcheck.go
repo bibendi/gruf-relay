@@ -22,7 +22,6 @@ type Checker struct {
 	interval     time.Duration
 	host         string
 	serverStates map[string]connectivity.State
-	stopChan     chan struct{}
 	mu           sync.RWMutex
 	ctx          context.Context
 	wg           *sync.WaitGroup
@@ -36,7 +35,6 @@ func NewChecker(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, pm *m
 		interval:     cfg.HealthCheckInterval,
 		host:         cfg.Host,
 		serverStates: make(map[string]connectivity.State),
-		stopChan:     make(chan struct{}),
 		ctx:          ctx,
 		wg:           wg,
 		log:          log,
@@ -45,7 +43,6 @@ func NewChecker(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, pm *m
 
 func (c *Checker) Start() {
 	c.wg.Add(1)
-	go c.waitCtxDone()
 	go c.run()
 	c.log.Info("Health checker started")
 }
@@ -63,22 +60,17 @@ func (c *Checker) GetServerState(name string) connectivity.State {
 func (c *Checker) run() {
 	ticker := time.NewTicker(c.interval)
 	defer ticker.Stop()
+	defer c.wg.Done()
 
 	for {
 		select {
 		case <-ticker.C:
 			c.checkAll()
-		case <-c.stopChan:
+		case <-c.ctx.Done():
 			c.log.Info("Health checker stopped")
-			c.wg.Done()
 			return
 		}
 	}
-}
-
-func (c *Checker) waitCtxDone() {
-	<-c.ctx.Done()
-	close(c.stopChan)
 }
 
 // TODO: check servers in parallel

@@ -12,7 +12,6 @@ import (
 
 type Manager struct {
 	Processes map[string]*process.Process
-	mu        sync.Mutex
 	log       *slog.Logger
 }
 
@@ -22,8 +21,8 @@ func NewManager(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, cfg *
 	for i := range cfg.Workers.Count {
 		name := fmt.Sprintf("worker-%d", i+1)
 		port := cfg.Workers.StartPort + i
-		addr := fmt.Sprintf("0.0.0.0:%d", port)
-		processes[name] = process.NewProcess(ctx, wg, log, name, addr)
+		metricsPort := port + 100
+		processes[name] = process.NewProcess(ctx, wg, log, name, port, metricsPort, cfg.Workers.MetricsPath)
 	}
 
 	return &Manager{
@@ -33,9 +32,6 @@ func NewManager(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, cfg *
 }
 
 func (m *Manager) StartAll() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	for _, process := range m.Processes {
 		if err := process.Start(); err != nil {
 			return fmt.Errorf("failed to start server %s: %w", process, err)
