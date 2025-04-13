@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/healthcheck"
 	"github.com/bibendi/gruf-relay/internal/manager"
 	"google.golang.org/grpc/connectivity"
@@ -22,11 +23,11 @@ type Probes struct {
 	log    *slog.Logger
 }
 
-func NewProbes(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, port int, isStarted *atomic.Value, pm *manager.Manager, hc *healthcheck.Checker) *Probes {
+func NewProbes(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, cfg *config.Probes, isStarted *atomic.Value, pm *manager.Manager, hc *healthcheck.Checker) *Probes {
 	mux := http.NewServeMux()
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
+		Addr:    fmt.Sprintf(":%d", cfg.Port),
 		Handler: mux,
 		BaseContext: func(_ net.Listener) context.Context {
 			return ctx
@@ -36,7 +37,7 @@ func NewProbes(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, port i
 	probes := &Probes{
 		ctx:    ctx,
 		wg:     wg,
-		port:   port,
+		port:   cfg.Port,
 		server: server,
 		log:    log,
 	}

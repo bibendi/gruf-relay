@@ -43,7 +43,7 @@ func main() {
 	isStarted.Store(false)
 
 	// Initialize Process Manager
-	pm := manager.NewManager(ctx, &wg, log, cfg)
+	pm := manager.NewManager(ctx, &wg, log, &cfg.Workers)
 
 	// Initialize gRPC processes
 	if err := pm.StartAll(); err != nil {
@@ -61,12 +61,12 @@ func main() {
 	hc.Start()
 
 	if cfg.Probes.Enabled {
-		probes := probes.NewProbes(ctx, &wg, log, cfg.Probes.Port, isStarted, pm, hc)
+		probes := probes.NewProbes(ctx, &wg, log, &cfg.Probes, isStarted, pm, hc)
 		probes.Start()
 	}
 
 	if cfg.Metrics.Enabled {
-		metrics, err := metrics.NewScraper(ctx, &wg, log, pm, cfg.Metrics.Port, cfg.Metrics.Path)
+		metrics, err := metrics.NewScraper(ctx, &wg, log, pm, &cfg.Metrics)
 		if err != nil {
 			log.Error("Failed to create scraper", slog.Any("error", err))
 			cancel()

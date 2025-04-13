@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/manager"
 	"github.com/bibendi/gruf-relay/internal/process"
 	"github.com/prometheus/client_golang/prometheus"
@@ -29,7 +30,7 @@ type Scraper struct {
 	server    *http.Server
 }
 
-func NewScraper(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, pm *manager.Manager, port int, path string) (*Scraper, error) {
+func NewScraper(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, pm *manager.Manager, cfg *config.Metrics) (*Scraper, error) {
 	client := &http.Client{
 		Timeout: 10 * time.Second, // Add timeout for http requests
 	}
@@ -45,10 +46,10 @@ func NewScraper(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, pm *m
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle(path, promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{}))
+	mux.Handle(cfg.Path, promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{}))
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
+		Addr:    fmt.Sprintf(":%d", cfg.Port),
 		Handler: mux,
 		BaseContext: func(_ net.Listener) context.Context {
 			return ctx

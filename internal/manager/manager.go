@@ -15,14 +15,14 @@ type Manager struct {
 	log       *slog.Logger
 }
 
-func NewManager(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, cfg *config.Config) *Manager {
-	processes := make(map[string]*process.Process, cfg.Workers.Count)
+func NewManager(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, cfg *config.Workers) *Manager {
+	processes := make(map[string]*process.Process, cfg.Count)
 
-	for i := range cfg.Workers.Count {
+	for i := range cfg.Count {
 		name := fmt.Sprintf("worker-%d", i+1)
-		port := cfg.Workers.StartPort + i
+		port := cfg.StartPort + i
 		metricsPort := port + 100
-		processes[name] = process.NewProcess(ctx, wg, log, name, port, metricsPort, cfg.Workers.MetricsPath)
+		processes[name] = process.NewProcess(ctx, wg, log, name, port, metricsPort, cfg.MetricsPath)
 	}
 
 	return &Manager{
