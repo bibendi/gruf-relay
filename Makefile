@@ -12,3 +12,7 @@ build:
 .PHONY: clean
 clean:
 	rm -rf $(BUILD_DIR)
+
+.PHONY: test
+test:
+	go test -v -cover -count=1 ./...

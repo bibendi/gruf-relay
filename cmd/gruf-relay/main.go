@@ -21,8 +21,6 @@ import (
 	"github.com/bibendi/gruf-relay/internal/server"
 )
 
-// TODO:
-// - Testify
 func main() {
 	// Load configuration
 	cfg, err := config.LoadConfig("config/gruf-relay.yml")
