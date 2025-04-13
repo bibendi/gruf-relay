@@ -48,6 +48,7 @@ func main() {
 	// Initialize gRPC processes
 	if err := pm.StartAll(); err != nil {
 		log.Error("Failed to start servers", slog.Any("error", err))
+		cancel()
 		os.Exit(1)
 	}
 
@@ -68,6 +69,7 @@ func main() {
 		metrics, err := metrics.NewScraper(ctx, &wg, log, pm, cfg.Metrics.Port, cfg.Metrics.Path)
 		if err != nil {
 			log.Error("Failed to create scraper", slog.Any("error", err))
+			cancel()
 			os.Exit(1)
 		}
 		go metrics.Start()

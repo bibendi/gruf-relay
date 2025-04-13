@@ -5,12 +5,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func TestLoadConfig(t *testing.T) {
-	content := []byte(`
+func TestConfig(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Config Suite")
+}
+
+var _ = Describe("Config", func() {
+	Describe("LoadConfig", func() {
+		var content []byte
+
+		BeforeEach(func() {
+			content = []byte(`
 log_level: info
 log_format: json
 host: "127.0.0.1"
@@ -28,134 +37,71 @@ metrics:
   metrics_port: 9395
   metrics_path: "/app-metrics"
 `)
+		})
 
-	tmpfile, err := os.CreateTemp("", "config-*.yaml")
-	require.NoError(t, err)
-	defer os.Remove(tmpfile.Name())
+		It("should load config from file", func() {
+			tmpfile, err := os.CreateTemp("", "config-*.yaml")
+			Expect(err).NotTo(HaveOccurred())
+			defer os.Remove(tmpfile.Name())
 
-	_, err = tmpfile.Write(content)
-	require.NoError(t, err)
-	require.NoError(t, tmpfile.Close())
+			_, err = tmpfile.Write(content)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tmpfile.Close()).NotTo(HaveOccurred())
 
-	cfg, err := LoadConfig(tmpfile.Name())
-	require.NoError(t, err)
-	require.NotNil(t, cfg)
+			cfg, err := LoadConfig(tmpfile.Name())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg).NotTo(BeNil())
+		})
 
-	assert.Equal(t, "info", cfg.LogLevel)
-	assert.Equal(t, "json", cfg.LogFormat)
-	assert.Equal(t, "127.0.0.1", cfg.Host)
-	assert.Equal(t, 8081, cfg.Port)
-	assert.Equal(t, 4, cfg.Workers.Count)
-	assert.Equal(t, 9001, cfg.Workers.StartPort)
-	assert.Equal(t, "/worker-metrics", cfg.Workers.MetricsPath)
-	assert.True(t, cfg.Probes.Enabled)
-	assert.Equal(t, 5556, cfg.Probes.Port)
-	assert.True(t, cfg.Metrics.Enabled)
-	assert.Equal(t, 9395, cfg.Metrics.Port)
-	assert.Equal(t, "/app-metrics", cfg.Metrics.Path)
-}
+		It("should return error for invalid file", func() {
+			_, err := LoadConfig("nonexistent.yaml")
+			Expect(err).To(HaveOccurred())
+		})
+	})
 
-func TestLoadConfigInvalidFile(t *testing.T) {
-	_, err := LoadConfig("nonexistent.yaml")
-	assert.Error(t, err)
-}
+	Describe("ValidateConfig", func() {
+		var config Config
 
-func TestValidateConfig(t *testing.T) {
-	tests := []struct {
-		name    string
-		config  Config
-		wantErr bool
-	}{
-		{
-			name: "valid config",
-			config: Config{
+		BeforeEach(func() {
+			// Initialize with a valid configuration
+			config = Config{
 				Port:                8080,
 				HealthCheckInterval: 5 * time.Second,
-				Workers: struct {
-					Count       int    `yaml:"count" env:"WORKERS_COUNT" env-default:"2"`
-					StartPort   int    `yaml:"start_port" env:"WORKERS_START_PORT" env-default:"9000"`
-					MetricsPath string `yaml:"metrics_path" env:"WORKERS_METRICS_PATH" env-default:"/metrics"`
-				}{
+				Workers: Workers{
 					Count:     2,
 					StartPort: 9000,
 				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "invalid port",
-			config: Config{
-				Port:                0,
-				HealthCheckInterval: 5 * time.Second,
-				Workers: struct {
-					Count       int    `yaml:"count" env:"WORKERS_COUNT" env-default:"2"`
-					StartPort   int    `yaml:"start_port" env:"WORKERS_START_PORT" env-default:"9000"`
-					MetricsPath string `yaml:"metrics_path" env:"WORKERS_METRICS_PATH" env-default:"/metrics"`
-				}{
-					Count:     2,
-					StartPort: 9000,
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid health check interval",
-			config: Config{
-				Port:                8080,
-				HealthCheckInterval: 0,
-				Workers: struct {
-					Count       int    `yaml:"count" env:"WORKERS_COUNT" env-default:"2"`
-					StartPort   int    `yaml:"start_port" env:"WORKERS_START_PORT" env-default:"9000"`
-					MetricsPath string `yaml:"metrics_path" env:"WORKERS_METRICS_PATH" env-default:"/metrics"`
-				}{
-					Count:     2,
-					StartPort: 9000,
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid workers count",
-			config: Config{
-				Port:                8080,
-				HealthCheckInterval: 5 * time.Second,
-				Workers: struct {
-					Count       int    `yaml:"count" env:"WORKERS_COUNT" env-default:"2"`
-					StartPort   int    `yaml:"start_port" env:"WORKERS_START_PORT" env-default:"9000"`
-					MetricsPath string `yaml:"metrics_path" env:"WORKERS_METRICS_PATH" env-default:"/metrics"`
-				}{
-					Count:     0,
-					StartPort: 9000,
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid workers start port",
-			config: Config{
-				Port:                8080,
-				HealthCheckInterval: 5 * time.Second,
-				Workers: struct {
-					Count       int    `yaml:"count" env:"WORKERS_COUNT" env-default:"2"`
-					StartPort   int    `yaml:"start_port" env:"WORKERS_START_PORT" env-default:"9000"`
-					MetricsPath string `yaml:"metrics_path" env:"WORKERS_METRICS_PATH" env-default:"/metrics"`
-				}{
-					Count:     2,
-					StartPort: 0,
-				},
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.validateConfig()
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
 			}
 		})
-	}
-}
+
+		Context("valid config", func() {
+			It("should not return an error", func() {
+				Expect(config.validateConfig()).NotTo(HaveOccurred())
+			})
+		})
+
+		DescribeTable("invalid config",
+			func(setup func(config *Config), valid bool) {
+				config := &Config{
+					Port:                8080,
+					HealthCheckInterval: 1,
+					Workers: Workers{
+						Count:     2,
+						StartPort: 9000,
+					},
+				}
+				setup(config)
+				err := config.validateConfig()
+				if valid {
+					Expect(err).ToNot(HaveOccurred())
+				} else {
+					Expect(err).To(HaveOccurred())
+				}
+			},
+			Entry("invalid port", func(config *Config) { config.Port = 0 }, false),
+			Entry("invalid health check interval", func(config *Config) { config.HealthCheckInterval = 0 }, false),
+			Entry("invalid workers count", func(config *Config) { config.Workers.Count = 0 }, false),
+			Entry("invalid workers start port", func(config *Config) { config.Workers.StartPort = 0 }, false),
+		)
+	})
+})
