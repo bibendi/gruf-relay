@@ -3,111 +3,65 @@ package logger
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
-	"testing"
 
-	"github.com/stretchr/testify/assert"
+	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/dsl/table"
+	. "github.com/onsi/gomega"
 )
 
-func TestNewLogger(t *testing.T) {
-	testCases := []struct {
-		name           string
-		level          string
-		format         string
-		expectedLevel  slog.Level
-		expectedFormat string
-		expectPanic    bool
-	}{
-		{
-			name:           "Valid JSON Debug",
-			level:          "debug",
-			format:         "json",
-			expectedLevel:  slog.LevelDebug,
-			expectedFormat: "json",
-			expectPanic:    false,
-		},
-		{
-			name:           "Valid Text Info",
-			level:          "info",
-			format:         "text",
-			expectedLevel:  slog.LevelInfo,
-			expectedFormat: "text",
-			expectPanic:    false,
-		},
-		{
-			name:           "Valid JSON Warn",
-			level:          "warn",
-			format:         "json",
-			expectedLevel:  slog.LevelWarn,
-			expectedFormat: "json",
-			expectPanic:    false,
-		},
-		{
-			name:           "Valid Text Error",
-			level:          "error",
-			format:         "text",
-			expectedLevel:  slog.LevelError,
-			expectedFormat: "text",
-			expectPanic:    false,
-		},
-		{
-			name:           "Invalid Level",
-			level:          "invalid",
-			format:         "json",
-			expectedLevel:  slog.LevelInfo,
-			expectedFormat: "json",
-			expectPanic:    true,
-		},
-		{
-			name:           "Invalid Format",
-			level:          "info",
-			format:         "invalid",
-			expectedLevel:  slog.LevelInfo,
-			expectedFormat: "invalid",
-			expectPanic:    true,
-		},
-	}
+var _ = Describe("Logger", func() {
+	Describe("NewLogger", func() {
+		var (
+			oldStdout *os.File
+			r         *os.File
+			w         *os.File
+		)
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			if tc.expectPanic {
-				assert.Panics(t, func() {
-					NewLogger(tc.level, tc.format)
-				}, "Expected a panic")
-			} else {
-				// Redirect stdout to capture log output
-				oldStdout := os.Stdout
-				r, w, _ := os.Pipe()
-				os.Stdout = w
-
-				logger := NewLogger(tc.level, tc.format)
-				logger.Log(context.Background(), tc.expectedLevel, "Test log message")
-
-				w.Close()
-				os.Stdout = oldStdout
-
-				var buf bytes.Buffer
-				buf.ReadFrom(r)
-				output := buf.String()
-
-				assert.NotEmpty(t, output, "Expected log output")
-				assert.True(t, strings.Contains(output, "Test log message"), "Expected log message in output")
-
-				switch tc.expectedFormat {
-				case "json":
-					assert.True(t, isJSON(output), "Expected JSON format")
-				case "text":
-					assert.True(t, !isJSON(output), "Expected Text format")
-				}
-
-				// Reset default logger back to nil to avoid interference with other tests
-				slog.SetDefault(slog.Default())
-			}
+		BeforeEach(func() {
+			// Redirect stdout to capture log output
+			oldStdout = os.Stdout
+			r, w, _ = os.Pipe()
+			os.Stdout = w
 		})
-	}
-}
+
+		AfterEach(func() {
+			// Restore stdout
+			w.Close()
+			os.Stdout = oldStdout
+			// Reset default logger to avoid interference
+			slog.SetDefault(slog.Default())
+		})
+
+		table.DescribeTable("Logger configurations",
+			func(level string, format string, expectedJSON bool, shouldPanic bool) {
+				if shouldPanic {
+					Expect(func() { NewLogger(level, format) }).Should(Panic())
+				} else {
+					logger := NewLogger(level, format)
+					logger.Log(context.Background(), slog.LevelInfo, "Test log message")
+
+					var buf bytes.Buffer
+					buf.ReadFrom(r)
+					output := buf.String()
+
+					Expect(output).ShouldNot(BeEmpty(), "Expected log output")
+					Expect(strings.Contains(output, "Test log message")).Should(BeTrue(), "Expected log message in output")
+					Expect(isJSON(output)).Should(Equal(expectedJSON), fmt.Sprintf("Expected JSON format: %v", expectedJSON))
+				}
+			},
+			table.Entry("Valid JSON Debug", "debug", "json", true, false),
+			table.Entry("Valid Text Info", "info", "text", false, false),
+			table.Entry("Valid JSON Warn", "warn", "json", true, false),
+			table.Entry("Valid Text Error", "error", "text", false, false),
+			table.Entry("Invalid Level", "invalid", "json", false, true),
+			table.Entry("Invalid Format", "info", "invalid", false, true),
+		)
+	})
+})
 
 func isJSON(s string) bool {
 	return strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}\n")
