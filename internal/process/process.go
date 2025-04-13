@@ -57,6 +57,15 @@ func (p *Process) String() string {
 }
 
 func (p *Process) Start() error {
+	p.wg.Add(1)
+	go p.waitCtxDone()
+	if err := p.start(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *Process) start() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -74,10 +83,6 @@ func (p *Process) Start() error {
 
 	p.running = true
 
-	p.startOnce.Do(func() {
-		p.wg.Add(1)
-		go p.waitCtxDone()
-	})
 	go p.waitCmdDone()
 
 	p.log.Info("Server started")
@@ -188,7 +193,7 @@ func (p *Process) waitCmdDone() {
 
 	time.Sleep(2 * time.Second)
 
-	if err := p.Start(); err != nil {
+	if err := p.start(); err != nil {
 		p.log.Error("Failed to restart server", slog.Any("error", err))
 	}
 }

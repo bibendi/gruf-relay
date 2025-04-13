@@ -32,13 +32,32 @@ func NewManager(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, cfg *
 }
 
 func (m *Manager) StartAll() error {
-	for _, process := range m.Processes {
-		if err := process.Start(); err != nil {
-			return fmt.Errorf("failed to start server %s: %w", process, err)
-		}
+	var wg sync.WaitGroup
+	errChan := make(chan error, 1)
+	defer close(errChan)
+
+	for _, p := range m.Processes {
+		wg.Add(1)
+		go func(p *process.Process) {
+			defer wg.Done()
+			if err := p.Start(); err != nil {
+				select {
+				case errChan <- err:
+				default:
+				}
+			}
+		}(p)
 	}
 
-	m.log.Info("Servers started", slog.Int("count", len(m.Processes)))
+	wg.Wait()
+
+	select {
+	case err := <-errChan:
+		return err
+	default:
+	}
+
+	m.log.Info("All servers started", slog.Int("count", len(m.Processes)))
 
 	return nil
 }
