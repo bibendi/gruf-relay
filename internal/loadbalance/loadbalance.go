@@ -13,8 +13,8 @@ import (
 )
 
 type RandomBalancer struct {
-	addChan      chan *process.Process
-	removeChan   chan *process.Process
+	addChan      chan process.Process
+	removeChan   chan process.Process
 	processes    atomic.Value
 	processNames map[string]bool
 	done         chan struct{}
@@ -26,15 +26,15 @@ type RandomBalancer struct {
 
 func NewRandomBalancer(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger) *RandomBalancer {
 	rb := &RandomBalancer{
-		addChan:      make(chan *process.Process),
-		removeChan:   make(chan *process.Process),
+		addChan:      make(chan process.Process),
+		removeChan:   make(chan process.Process),
 		done:         make(chan struct{}),
 		processNames: make(map[string]bool),
 		ctx:          ctx,
 		wg:           wg,
 		log:          log,
 	}
-	rb.processes.Store([]*process.Process{})
+	rb.processes.Store([]process.Process{})
 	return rb
 }
 
@@ -45,16 +45,16 @@ func (rb *RandomBalancer) Start() {
 	rb.log.Info("Load balancer started")
 }
 
-func (rb *RandomBalancer) AddProcess(p *process.Process) {
+func (rb *RandomBalancer) AddProcess(p process.Process) {
 	rb.addChan <- p
 }
 
-func (rb *RandomBalancer) RemoveProcess(p *process.Process) {
+func (rb *RandomBalancer) RemoveProcess(p process.Process) {
 	rb.removeChan <- p
 }
 
-func (rb *RandomBalancer) Next() *process.Process {
-	processes := rb.processes.Load().([]*process.Process)
+func (rb *RandomBalancer) Next() process.Process {
+	processes := rb.processes.Load().([]process.Process)
 	if len(processes) == 0 {
 		return nil
 	}
@@ -73,29 +73,29 @@ func (rb *RandomBalancer) balance() {
 		select {
 		case p := <-rb.addChan:
 			rb.mu.Lock()
-			if _, ok := rb.processNames[p.Name]; ok {
+			if _, ok := rb.processNames[p.String()]; ok {
 				rb.mu.Unlock()
 				continue
 			}
-			currentProcesses := rb.processes.Load().([]*process.Process)
+			currentProcesses := rb.processes.Load().([]process.Process)
 			rb.processes.Store(append(currentProcesses, p))
-			rb.processNames[p.Name] = true
+			rb.processNames[p.String()] = true
 			rb.mu.Unlock()
 		case p := <-rb.removeChan:
 			rb.mu.Lock()
-			if _, ok := rb.processNames[p.Name]; !ok {
+			if _, ok := rb.processNames[p.String()]; !ok {
 				rb.mu.Unlock()
 				continue
 			}
-			currentProcesses := rb.processes.Load().([]*process.Process)
-			var newProcesses []*process.Process
+			currentProcesses := rb.processes.Load().([]process.Process)
+			var newProcesses []process.Process
 			for i, cp := range currentProcesses {
-				if cp.Name == p.Name {
+				if cp.String() == p.String() {
 					newProcesses = slices.Delete(currentProcesses, i, i+1)
 					break
 				}
 			}
-			delete(rb.processNames, p.Name)
+			delete(rb.processNames, p.String())
 			rb.processes.Store(newProcesses)
 
 			rb.mu.Unlock()

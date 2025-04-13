@@ -23,7 +23,7 @@ var (
 )
 
 type Balancer interface {
-	Next() *process.Process
+	Next() process.Process
 }
 
 type Proxy struct {

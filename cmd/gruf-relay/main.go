@@ -57,7 +57,7 @@ func main() {
 	lb.Start()
 
 	// Initialize Health Checker
-	hc := healthcheck.NewChecker(ctx, &wg, log, pm, cfg, lb)
+	hc := healthcheck.NewChecker(ctx, &wg, log, pm.Processes, cfg, lb)
 	hc.Start()
 
 	if cfg.Probes.Enabled {

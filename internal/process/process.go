@@ -16,10 +16,17 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type Process struct {
+type Process interface {
+	Start() error
+	IsRunning() bool
+	String() string
+	Addr() string
+	MetricsAddr() string
+	GetClient() (*grpc.ClientConn, error)
+}
+
+type processImpl struct {
 	Name        string
-	Addr        string
-	MetricsAddr string
 	port        int
 	metricsPort int
 	metricsPath string
@@ -32,31 +39,35 @@ type Process struct {
 	running     bool
 	stopping    bool
 	cmdDoneChan chan error
-	startOnce   sync.Once
 }
 
-func NewProcess(ctx context.Context, wg *sync.WaitGroup, logger *slog.Logger, name string, port, metricsPort int, metricsPath string) *Process {
+func NewProcess(ctx context.Context, wg *sync.WaitGroup, logger *slog.Logger, name string, port, metricsPort int, metricsPath string) Process {
 	log := logger.With(slog.String("process", name))
-	return &Process{
+	return &processImpl{
 		Name:        name,
-		Addr:        fmt.Sprintf("0.0.0.0:%d", port),
-		MetricsAddr: fmt.Sprintf("0.0.0.0:%d/%s", metricsPort, metricsPath),
 		port:        port,
 		metricsPort: metricsPort,
 		metricsPath: metricsPath,
 		ctx:         ctx,
 		wg:          wg,
 		cmdDoneChan: make(chan error, 1),
-		startOnce:   sync.Once{},
 		log:         log,
 	}
 }
 
-func (p *Process) String() string {
+func (p *processImpl) String() string {
 	return p.Name
 }
 
-func (p *Process) Start() error {
+func (p *processImpl) Addr() string {
+	return fmt.Sprintf("0.0.0.0:%d", p.port)
+}
+
+func (p *processImpl) MetricsAddr() string {
+	return fmt.Sprintf("0.0.0.0:%d%s", p.metricsPort, p.metricsPath)
+}
+
+func (p *processImpl) Start() error {
 	p.wg.Add(1)
 	go p.waitCtxDone()
 	if err := p.start(); err != nil {
@@ -65,7 +76,7 @@ func (p *Process) Start() error {
 	return nil
 }
 
-func (p *Process) start() error {
+func (p *processImpl) start() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -89,19 +100,19 @@ func (p *Process) start() error {
 	return nil
 }
 
-func (p *Process) IsRunning() bool {
+func (p *processImpl) IsRunning() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.running
 }
 
-func (p *Process) GetClient() (*grpc.ClientConn, error) {
+func (p *processImpl) GetClient() (*grpc.ClientConn, error) {
 	if p.client == nil {
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		if p.client == nil {
 			client, err := grpc.NewClient(
-				p.Addr,
+				p.Addr(),
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
 				grpc.WithCodec(codec.Codec()))
 			if err != nil {
@@ -113,7 +124,7 @@ func (p *Process) GetClient() (*grpc.ClientConn, error) {
 	return p.client, nil
 }
 
-func (p *Process) shoutdown() error {
+func (p *processImpl) shoutdown() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	defer p.wg.Done()
@@ -162,7 +173,7 @@ func (p *Process) shoutdown() error {
 	return nil
 }
 
-func (p *Process) waitCtxDone() {
+func (p *processImpl) waitCtxDone() {
 	<-p.ctx.Done()
 
 	if err := p.shoutdown(); err != nil {
@@ -170,7 +181,7 @@ func (p *Process) waitCtxDone() {
 	}
 }
 
-func (p *Process) waitCmdDone() {
+func (p *processImpl) waitCmdDone() {
 	err := p.cmd.Wait()
 	if err != nil {
 		p.log.Error("Server exited unexpectedly", slog.Any("error", err))
@@ -198,7 +209,7 @@ func (p *Process) waitCmdDone() {
 	}
 }
 
-func (p *Process) buildCmd() *exec.Cmd {
+func (p *processImpl) buildCmd() *exec.Cmd {
 	args := p.cmdArgs()
 	cmd := exec.Command(args[0], args[1:]...)
 	// Allow to exec programs in the current directory
@@ -214,6 +225,6 @@ func (p *Process) buildCmd() *exec.Cmd {
 	return cmd
 }
 
-func (p *Process) cmdArgs() []string {
-	return []string{"bundle", "exec", "gruf", "--host", p.Addr, "--health-check", "--backtrace-on-error"}
+func (p *processImpl) cmdArgs() []string {
+	return []string{"bundle", "exec", "gruf", "--host", p.Addr(), "--health-check", "--backtrace-on-error"}
 }

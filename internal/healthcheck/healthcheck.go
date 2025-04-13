@@ -9,7 +9,6 @@ import (
 
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/loadbalance"
-	"github.com/bibendi/gruf-relay/internal/manager"
 	"github.com/bibendi/gruf-relay/internal/process"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
@@ -17,7 +16,7 @@ import (
 )
 
 type Checker struct {
-	pm           *manager.Manager
+	processes    map[string]process.Process
 	lb           *loadbalance.RandomBalancer
 	interval     time.Duration
 	host         string
@@ -28,9 +27,9 @@ type Checker struct {
 	log          *slog.Logger
 }
 
-func NewChecker(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, pm *manager.Manager, cfg *config.Config, lb *loadbalance.RandomBalancer) *Checker {
+func NewChecker(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, processes map[string]process.Process, cfg *config.Config, lb *loadbalance.RandomBalancer) *Checker {
 	return &Checker{
-		pm:           pm,
+		processes:    processes,
 		lb:           lb,
 		interval:     cfg.HealthCheckInterval,
 		host:         cfg.Host,
@@ -75,23 +74,23 @@ func (c *Checker) run() {
 
 // TODO: check servers in parallel
 func (c *Checker) checkAll() {
-	for _, server := range c.pm.Processes {
+	for _, server := range c.processes {
 		c.checkServer(server)
 	}
 }
 
-func (c *Checker) checkServer(p *process.Process) {
+func (c *Checker) checkServer(p process.Process) {
 	if !p.IsRunning() {
 		c.lb.RemoveProcess(p)
-		c.updateServerState(p.Name, connectivity.Shutdown)
+		c.updateServerState(p.String(), connectivity.Shutdown)
 		c.log.Error("Server is not running", slog.Any("server", p), slog.Any("state", connectivity.Shutdown))
 		return
 	}
 
-	conn, err := grpc.Dial(p.Addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
+	conn, err := grpc.Dial(p.Addr(), grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(3*time.Second))
 	if err != nil {
 		c.lb.RemoveProcess(p)
-		c.updateServerState(p.Name, connectivity.TransientFailure)
+		c.updateServerState(p.String(), connectivity.TransientFailure)
 		c.log.Error("Failed to dial server", slog.Any("server", p), slog.Any("error", err), slog.Any("state", connectivity.TransientFailure))
 		return
 	}
@@ -105,7 +104,7 @@ func (c *Checker) checkServer(p *process.Process) {
 	resp, err := client.Check(ctx, req)
 	if err != nil {
 		c.lb.RemoveProcess(p)
-		c.updateServerState(p.Name, connectivity.TransientFailure)
+		c.updateServerState(p.String(), connectivity.TransientFailure)
 		c.log.Error("Health check failed for server", slog.Any("server", p), slog.Any("error", err), slog.Any("state", connectivity.TransientFailure))
 		return
 	}
@@ -123,7 +122,7 @@ func (c *Checker) checkServer(p *process.Process) {
 		c.lb.RemoveProcess(p)
 	}
 
-	c.updateServerState(p.Name, state)
+	c.updateServerState(p.String(), state)
 	c.log.Info("Server is healthy", slog.Any("server", p), slog.Any("status", resp.Status), slog.Any("state", state))
 }
 

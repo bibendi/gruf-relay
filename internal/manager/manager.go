@@ -11,12 +11,12 @@ import (
 )
 
 type Manager struct {
-	Processes map[string]*process.Process
+	Processes map[string]process.Process
 	log       *slog.Logger
 }
 
 func NewManager(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, cfg *config.Workers) *Manager {
-	processes := make(map[string]*process.Process, cfg.Count)
+	processes := make(map[string]process.Process, cfg.Count)
 
 	for i := range cfg.Count {
 		name := fmt.Sprintf("worker-%d", i+1)
@@ -38,7 +38,7 @@ func (m *Manager) StartAll() error {
 
 	for _, p := range m.Processes {
 		wg.Add(1)
-		go func(p *process.Process) {
+		go func(p process.Process) {
 			defer wg.Done()
 			if err := p.Start(); err != nil {
 				select {

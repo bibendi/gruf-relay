@@ -113,10 +113,10 @@ func (s *Scraper) scrapeAndAggregate() {
 		}
 
 		wg.Add(1)
-		go func(p *process.Process) {
+		go func(p process.Process) {
 			defer wg.Done()
 
-			mfList, err := s.scrapeMetrics("http://" + p.MetricsAddr)
+			mfList, err := s.scrapeMetrics("http://" + p.MetricsAddr())
 			if err != nil {
 				s.log.Error("Error scraping metrics", slog.Any("process", p), slog.Any("error", err))
 				return
