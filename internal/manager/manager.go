@@ -7,27 +7,28 @@ import (
 	"sync"
 
 	"github.com/bibendi/gruf-relay/internal/config"
+	"github.com/bibendi/gruf-relay/internal/logger"
 	"github.com/bibendi/gruf-relay/internal/process"
 )
 
+var log = logger.NewPackageLogger("package", "manager")
+
 type Manager struct {
 	Processes map[string]process.Process
-	log       *slog.Logger
 }
 
-func NewManager(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, cfg *config.Workers) *Manager {
+func NewManager(ctx context.Context, wg *sync.WaitGroup, cfg *config.Workers) *Manager {
 	processes := make(map[string]process.Process, cfg.Count)
 
 	for i := range cfg.Count {
 		name := fmt.Sprintf("worker-%d", i+1)
 		port := cfg.StartPort + i
 		metricsPort := port + 100
-		processes[name] = process.NewProcess(ctx, wg, log, name, port, metricsPort, cfg.MetricsPath)
+		processes[name] = process.NewProcess(ctx, wg, name, port, metricsPort, cfg.MetricsPath)
 	}
 
 	return &Manager{
 		Processes: processes,
-		log:       log,
 	}
 }
 
@@ -57,7 +58,7 @@ func (m *Manager) StartAll() error {
 	default:
 	}
 
-	m.log.Info("All servers started", slog.Int("count", len(m.Processes)))
+	log.Info("All servers started", slog.Int("count", len(m.Processes)))
 
 	return nil
 }

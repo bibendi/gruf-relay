@@ -1,8 +1,6 @@
 package metrics
 
 import (
-	"log/slog"
-
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 )
@@ -11,10 +9,9 @@ type counterCollector struct {
 	desc   *prometheus.Desc
 	mf     *dto.MetricFamily
 	labels []string
-	log    *slog.Logger
 }
 
-func newCounterCollector(log *slog.Logger, mf *dto.MetricFamily) *counterCollector {
+func newCounterCollector(mf *dto.MetricFamily) *counterCollector {
 	var labelNames []string
 	if len(mf.Metric) > 0 {
 		for _, label := range mf.Metric[0].Label {
@@ -31,7 +28,6 @@ func newCounterCollector(log *slog.Logger, mf *dto.MetricFamily) *counterCollect
 		),
 		mf:     mf,
 		labels: labelNames,
-		log:    log,
 	}
 }
 

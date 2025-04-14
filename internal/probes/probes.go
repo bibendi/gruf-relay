@@ -11,19 +11,21 @@ import (
 
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/healthcheck"
+	"github.com/bibendi/gruf-relay/internal/logger"
 	"github.com/bibendi/gruf-relay/internal/manager"
 	"google.golang.org/grpc/connectivity"
 )
+
+var log = logger.NewPackageLogger("package", "probes")
 
 type Probes struct {
 	ctx    context.Context
 	wg     *sync.WaitGroup
 	port   int
 	server *http.Server
-	log    *slog.Logger
 }
 
-func NewProbes(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, cfg *config.Probes, isStarted *atomic.Value, pm *manager.Manager, hc *healthcheck.Checker) *Probes {
+func NewProbes(ctx context.Context, wg *sync.WaitGroup, cfg *config.Probes, isStarted *atomic.Value, pm *manager.Manager, hc *healthcheck.Checker) *Probes {
 	mux := http.NewServeMux()
 
 	server := &http.Server{
@@ -39,7 +41,6 @@ func NewProbes(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, cfg *c
 		wg:     wg,
 		port:   cfg.Port,
 		server: server,
-		log:    log,
 	}
 
 	mux.HandleFunc("/startup", probes.handleStartupProbe(isStarted))
@@ -53,14 +54,14 @@ func (p *Probes) Start() {
 	p.wg.Add(1)
 	go p.waitCtxDone()
 	go p.run()
-	p.log.Info("Probes server started", slog.Int("port", p.port))
+	log.Info("Probes server started", slog.Int("port", p.port))
 }
 
 func (p *Probes) waitCtxDone() {
 	<-p.ctx.Done()
-	p.log.Info("Stopping probes server")
+	log.Info("Stopping probes server")
 	if err := p.server.Shutdown(context.Background()); err != nil {
-		p.log.Error("Failed to shutdown probes server", slog.Any("err", err))
+		log.Error("Failed to shutdown probes server", slog.Any("err", err))
 	}
 }
 
@@ -69,16 +70,16 @@ func (p *Probes) run() {
 
 	if err := p.server.ListenAndServe(); err != nil {
 		if err != http.ErrServerClosed {
-			p.log.Error("Probes server failed", slog.Any("err", err))
+			log.Error("Probes server failed", slog.Any("err", err))
 		}
 	}
 }
 
 func (p *Probes) handleStartupProbe(isStarted *atomic.Value) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		p.log.Info("Received startup request")
+		log.Info("Received startup request")
 		if isStarted.Load() == false {
-			p.log.Error("Relay is not started yet, returning 503")
+			log.Error("Relay is not started yet, returning 503")
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
@@ -88,10 +89,10 @@ func (p *Probes) handleStartupProbe(isStarted *atomic.Value) http.HandlerFunc {
 
 func (p *Probes) handleReadinessProbe(pm *manager.Manager, hc *healthcheck.Checker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		p.log.Info("Received readiness request")
+		log.Info("Received readiness request")
 		for name, process := range pm.Processes {
 			if state := hc.GetServerState(name); state == connectivity.TransientFailure || state == connectivity.Shutdown {
-				p.log.Error("Readiness probe failed", slog.Any("process", process), slog.Any("state", state))
+				log.Error("Readiness probe failed", slog.Any("process", process), slog.Any("state", state))
 				w.WriteHeader(http.StatusServiceUnavailable)
 				return
 			}
@@ -102,10 +103,10 @@ func (p *Probes) handleReadinessProbe(pm *manager.Manager, hc *healthcheck.Check
 
 func (p *Probes) handleLivenessrobe(pm *manager.Manager, hc *healthcheck.Checker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		p.log.Info("Received liveness request")
+		log.Info("Received liveness request")
 		for name, process := range pm.Processes {
 			if state := hc.GetServerState(name); state == connectivity.Shutdown {
-				p.log.Error("Liveness probe failed", slog.Any("process", process), slog.Any("state", state))
+				log.Error("Liveness probe failed", slog.Any("process", process), slog.Any("state", state))
 				w.WriteHeader(http.StatusServiceUnavailable)
 				return
 			}

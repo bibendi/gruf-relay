@@ -4,8 +4,6 @@ package manager
 import (
 	"context"
 	"errors"
-	"log/slog"
-	"os"
 	"sync"
 	"testing"
 
@@ -27,7 +25,6 @@ var _ = Describe("Manager", func() {
 		ctrl    *gomock.Controller
 		ctx     context.Context
 		wg      *sync.WaitGroup
-		log     *slog.Logger
 		cfg     *config.Workers
 		manager *Manager
 	)
@@ -36,13 +33,12 @@ var _ = Describe("Manager", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		ctx = context.Background()
 		wg = &sync.WaitGroup{}
-		log = slog.New(slog.NewTextHandler(os.Stdout, nil))
 		cfg = &config.Workers{
 			Count:       2,
 			StartPort:   9000,
 			MetricsPath: "/metrics",
 		}
-		manager = NewManager(ctx, wg, log, cfg)
+		manager = NewManager(ctx, wg, cfg)
 	})
 
 	AfterEach(func() {

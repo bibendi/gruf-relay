@@ -1,8 +1,6 @@
 package metrics
 
 import (
-	"log/slog"
-
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 )
@@ -11,11 +9,10 @@ type gaugeCollector struct {
 	desc   *prometheus.Desc
 	mf     *dto.MetricFamily
 	labels []string
-	log    *slog.Logger
 }
 
 // newGaugeCollector - конструктор для gaugeCollector.
-func newGaugeCollector(log *slog.Logger, mf *dto.MetricFamily) prometheus.Collector {
+func newGaugeCollector(mf *dto.MetricFamily) prometheus.Collector {
 	// Get the label names from the MetricFamily
 	var labelNames []string
 	if len(mf.Metric) > 0 {
@@ -33,7 +30,6 @@ func newGaugeCollector(log *slog.Logger, mf *dto.MetricFamily) prometheus.Collec
 		),
 		mf:     mf,
 		labels: labelNames,
-		log:    log,
 	}
 }
 

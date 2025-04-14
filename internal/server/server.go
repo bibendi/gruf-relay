@@ -8,21 +8,23 @@ import (
 
 	"github.com/bibendi/gruf-relay/internal/codec"
 	"github.com/bibendi/gruf-relay/internal/config"
+	"github.com/bibendi/gruf-relay/internal/logger"
 	"github.com/bibendi/gruf-relay/internal/proxy"
 	"google.golang.org/grpc"
 )
+
+var log = logger.NewPackageLogger("package", "server")
 
 type Server struct {
 	host       string
 	port       int
 	grpcServer *grpc.Server
 	ctx        context.Context
-	log        *slog.Logger
 }
 
 type ServiceHandler func(srv interface{}, stream grpc.ServerStream) error
 
-func NewServer(ctx context.Context, log *slog.Logger, cfg *config.Config, proxy *proxy.Proxy) *Server {
+func NewServer(ctx context.Context, cfg *config.Config, proxy *proxy.Proxy) *Server {
 	server := grpc.NewServer(
 		grpc.CustomCodec(codec.Codec()),
 		grpc.UnknownServiceHandler(proxy.HandleRequest),
@@ -33,7 +35,6 @@ func NewServer(ctx context.Context, log *slog.Logger, cfg *config.Config, proxy 
 		port:       cfg.Port,
 		grpcServer: server,
 		ctx:        ctx,
-		log:        log,
 	}
 }
 
@@ -44,7 +45,7 @@ func (s *Server) Serve() error {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
 
-	s.log.Info("Starting gRPC server", slog.String("addr", addr))
+	log.Info("Starting gRPC server", slog.String("addr", addr))
 
 	if err := s.grpcServer.Serve(lis); err != nil {
 		return fmt.Errorf("gRPC server has failed: %v", err)
@@ -54,6 +55,6 @@ func (s *Server) Serve() error {
 }
 
 func (s *Server) Shoutdown() {
-	s.log.Info("Stopping gRPC server")
+	log.Info("Stopping gRPC server")
 	s.grpcServer.GracefulStop()
 }

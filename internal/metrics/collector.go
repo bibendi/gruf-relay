@@ -13,12 +13,10 @@ import (
 type aggregatedCollector struct {
 	mu      sync.Mutex
 	metrics map[string]*dto.MetricFamily
-	log     *slog.Logger
 }
 
-func newAggregatedCollector(log *slog.Logger) *aggregatedCollector {
+func newAggregatedCollector() *aggregatedCollector {
 	return &aggregatedCollector{
-		log:     log,
 		metrics: make(map[string]*dto.MetricFamily),
 	}
 }
@@ -26,12 +24,12 @@ func newAggregatedCollector(log *slog.Logger) *aggregatedCollector {
 func (c *aggregatedCollector) Collect(ch chan<- prometheus.Metric) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	//c.log.Debug("Collecting metrics", slog.Any("metrics", c.metrics))
+	//log.Debug("Collecting metrics", slog.Any("metrics", c.metrics))
 
 	for _, mf := range c.metrics {
 		collector, err := c.convertMetricFamilyToCollector(mf)
 		if err != nil {
-			c.log.Error("Error converting metric family to collector", slog.Any("error", err))
+			log.Error("Error converting metric family to collector", slog.Any("error", err))
 			continue
 		}
 		collector.Collect(ch)
@@ -50,18 +48,18 @@ func (c *aggregatedCollector) Describe(ch chan<- *prometheus.Desc) {
 func (c *aggregatedCollector) updateMetrics(metricsMap map[string]*dto.MetricFamily) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	//slog.Debug("Updating metrics map", slog.Any("metrics", metricsMap))
+	//log.Debug("Updating metrics map", slog.Any("metrics", metricsMap))
 	c.metrics = metricsMap
 }
 
 func (c *aggregatedCollector) convertMetricFamilyToCollector(mf *dto.MetricFamily) (prometheus.Collector, error) {
 	switch *mf.Type {
 	case dto.MetricType_COUNTER:
-		return newCounterCollector(c.log, mf), nil
+		return newCounterCollector(mf), nil
 	case dto.MetricType_GAUGE:
-		return newGaugeCollector(c.log, mf), nil
+		return newGaugeCollector(mf), nil
 	case dto.MetricType_HISTOGRAM:
-		return newHistogramCollector(c.log, mf), nil
+		return newHistogramCollector(mf), nil
 	// case dto.MetricType_SUMMARY:
 	// 	return newSummaryCollector(mf), nil
 	// case dto.MetricType_UNTYPED:

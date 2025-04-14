@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	"github.com/bibendi/gruf-relay/internal/logger"
 	"github.com/bibendi/gruf-relay/internal/process"
 )
 
@@ -20,6 +21,8 @@ var (
 		ServerStreams: true,
 		ClientStreams: true,
 	}
+
+	log = logger.NewPackageLogger("package", "proxy")
 )
 
 type Balancer interface {
@@ -28,13 +31,11 @@ type Balancer interface {
 
 type Proxy struct {
 	Balancer Balancer
-	log      *slog.Logger
 }
 
-func NewProxy(log *slog.Logger, balancer Balancer) *Proxy {
+func NewProxy(balancer Balancer) *Proxy {
 	return &Proxy{
 		Balancer: balancer,
-		log:      log,
 	}
 }
 
@@ -45,17 +46,17 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 	if !ok {
 		return status.Error(codes.Internal, "method unknown")
 	}
-	p.log.Info("Handle gRPC request", slog.String("method", fullMethod))
+	log.Info("Handle gRPC request", slog.String("method", fullMethod))
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, 1000*time.Second)
 	defer cancel()
 
 	md, _ := metadata.FromIncomingContext(ctx)
 	outCtx := metadata.NewOutgoingContext(timeoutCtx, md.Copy())
-	p.log.Debug("Request metadata", slog.Any("metadata", md))
+	log.Debug("Request metadata", slog.Any("metadata", md))
 
 	process := p.Balancer.Next()
-	p.log.Debug("Selected server", slog.Any("server", process))
+	log.Debug("Selected server", slog.Any("server", process))
 	if process == nil {
 		return status.Error(codes.Unavailable, "server unavailable")
 	}
@@ -72,7 +73,7 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 		return status.Errorf(codes.Unavailable, "failed creating downstream: %v", err)
 	}
 
-	p.log.Info("Proxying request", slog.String("method", fullMethod), slog.Any("server", process))
+	log.Info("Proxying request", slog.String("method", fullMethod), slog.Any("server", process))
 
 	upstreamErrChan := proxyRequest(upstream, downstream)
 	downstreamErrChan := proxyResponse(downstream, upstream)
@@ -99,10 +100,10 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 			upstream.SetTrailer(downstream.Trailer())
 
 			if err == io.EOF {
-				p.log.Info("Finish proxying", slog.String("method", fullMethod), slog.Any("server", process))
+				log.Info("Finish proxying", slog.String("method", fullMethod), slog.Any("server", process))
 				return nil
 			} else {
-				p.log.Error("Failed proxy response", slog.Any("server", process), slog.Any("error", err))
+				log.Error("Failed proxy response", slog.Any("server", process), slog.Any("error", err))
 				return err
 			}
 		}

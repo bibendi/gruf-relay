@@ -12,9 +12,12 @@ import (
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/codec"
+	"github.com/bibendi/gruf-relay/internal/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+var log = logger.NewPackageLogger("package", "process")
 
 type Process interface {
 	Start() error
@@ -41,8 +44,8 @@ type processImpl struct {
 	cmdDoneChan chan error
 }
 
-func NewProcess(ctx context.Context, wg *sync.WaitGroup, logger *slog.Logger, name string, port, metricsPort int, metricsPath string) Process {
-	log := logger.With(slog.String("process", name))
+func NewProcess(ctx context.Context, wg *sync.WaitGroup, name string, port, metricsPort int, metricsPath string) Process {
+	logger := log.With(slog.String("process", name))
 	return &processImpl{
 		Name:        name,
 		port:        port,
@@ -51,7 +54,7 @@ func NewProcess(ctx context.Context, wg *sync.WaitGroup, logger *slog.Logger, na
 		ctx:         ctx,
 		wg:          wg,
 		cmdDoneChan: make(chan error, 1),
-		log:         log,
+		log:         logger,
 	}
 }
 

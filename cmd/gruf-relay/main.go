@@ -30,6 +30,7 @@ func main() {
 
 	// Initialize Logger
 	log := logger.NewLogger(cfg.LogLevel, cfg.LogFormat)
+	slog.SetDefault(log)
 
 	log.Info("Starting gRPC Relay")
 	log.Debug("Configuration loaded")
@@ -43,7 +44,7 @@ func main() {
 	isStarted.Store(false)
 
 	// Initialize Process Manager
-	pm := manager.NewManager(ctx, &wg, log, &cfg.Workers)
+	pm := manager.NewManager(ctx, &wg, &cfg.Workers)
 
 	// Initialize gRPC processes
 	if err := pm.StartAll(); err != nil {
@@ -52,21 +53,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize Load Balancer
-	lb := loadbalance.NewRandomBalancer(ctx, &wg, log)
-	lb.Start()
+	// Start Load Balancer
+	lb := loadbalance.NewRandomBalancer()
+	go func() {
+		defer wg.Done()
+		lb.Start(ctx)
+	}()
 
 	// Initialize Health Checker
-	hc := healthcheck.NewChecker(ctx, &wg, log, pm.Processes, cfg, lb)
+	hc := healthcheck.NewChecker(ctx, &wg, pm.Processes, cfg, lb)
 	hc.Start()
 
 	if cfg.Probes.Enabled {
-		probes := probes.NewProbes(ctx, &wg, log, &cfg.Probes, isStarted, pm, hc)
+		probes := probes.NewProbes(ctx, &wg, &cfg.Probes, isStarted, pm, hc)
 		probes.Start()
 	}
 
 	if cfg.Metrics.Enabled {
-		metrics, err := metrics.NewScraper(ctx, &wg, log, pm, &cfg.Metrics)
+		metrics, err := metrics.NewScraper(ctx, &wg, pm, &cfg.Metrics)
 		if err != nil {
 			log.Error("Failed to create scraper", slog.Any("error", err))
 			cancel()
@@ -76,10 +80,10 @@ func main() {
 	}
 
 	// Initialize gRPC Proxy
-	grpcProxy := proxy.NewProxy(log, lb)
+	grpcProxy := proxy.NewProxy(lb)
 
 	// Initialize gRPC server
-	grpcServer := server.NewServer(ctx, log, cfg, grpcProxy)
+	grpcServer := server.NewServer(ctx, cfg, grpcProxy)
 
 	go handleSignals(grpcServer, log)
 	isStarted.Store(true)

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/config"
+	"github.com/bibendi/gruf-relay/internal/logger"
 	"github.com/bibendi/gruf-relay/internal/manager"
 	"github.com/bibendi/gruf-relay/internal/process"
 	"github.com/prometheus/client_golang/prometheus"
@@ -19,10 +20,11 @@ import (
 	"github.com/prometheus/common/expfmt"
 )
 
+var log = logger.NewPackageLogger("package", "metrics")
+
 type Scraper struct {
 	ctx       context.Context
 	wg        *sync.WaitGroup
-	log       *slog.Logger
 	pm        *manager.Manager
 	interval  time.Duration
 	collector *aggregatedCollector
@@ -30,13 +32,13 @@ type Scraper struct {
 	server    *http.Server
 }
 
-func NewScraper(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, pm *manager.Manager, cfg *config.Metrics) (*Scraper, error) {
+func NewScraper(ctx context.Context, wg *sync.WaitGroup, pm *manager.Manager, cfg *config.Metrics) (*Scraper, error) {
 	client := &http.Client{
 		Timeout: 10 * time.Second, // Add timeout for http requests
 	}
 
 	registry := prometheus.NewRegistry()
-	collector := newAggregatedCollector(log)
+	collector := newAggregatedCollector()
 	if err := registry.Register(collector); err != nil {
 		return nil, fmt.Errorf("failed to register aggregated collector: %w", err)
 	}
@@ -59,7 +61,6 @@ func NewScraper(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, pm *m
 	return &Scraper{
 		ctx:       ctx,
 		wg:        wg,
-		log:       log,
 		pm:        pm,
 		interval:  5 * time.Second,
 		client:    client,
@@ -70,7 +71,7 @@ func NewScraper(ctx context.Context, wg *sync.WaitGroup, log *slog.Logger, pm *m
 
 func (s *Scraper) Start() {
 	s.wg.Add(1)
-	s.log.Info("Starting metrics scraper")
+	log.Info("Starting metrics scraper")
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 	defer s.wg.Done()
@@ -80,11 +81,11 @@ func (s *Scraper) Start() {
 	for {
 		select {
 		case <-s.ctx.Done():
-			s.log.Info("Stopping metrics server")
+			log.Info("Stopping metrics server")
 			if err := s.server.Shutdown(context.Background()); err != nil {
-				s.log.Error("Failed to shutdown metrics server", slog.Any("err", err))
+				log.Error("Failed to shutdown metrics server", slog.Any("err", err))
 			}
-			s.log.Info("Metrics scraper stopped")
+			log.Info("Metrics scraper stopped")
 			return
 		case <-ticker.C:
 			s.scrapeAndAggregate()
@@ -95,13 +96,13 @@ func (s *Scraper) Start() {
 func (s *Scraper) runServer() {
 	if err := s.server.ListenAndServe(); err != nil {
 		if err != http.ErrServerClosed {
-			s.log.Error("Metrics server failed", slog.Any("err", err))
+			log.Error("Metrics server failed", slog.Any("err", err))
 		}
 	}
 }
 
 func (s *Scraper) scrapeAndAggregate() {
-	s.log.Info("Scraping metrics")
+	log.Info("Scraping metrics")
 	var wg sync.WaitGroup
 	var mapMu sync.Mutex
 
@@ -118,7 +119,7 @@ func (s *Scraper) scrapeAndAggregate() {
 
 			mfList, err := s.scrapeMetrics("http://" + p.MetricsAddr())
 			if err != nil {
-				s.log.Error("Error scraping metrics", slog.Any("process", p), slog.Any("error", err))
+				log.Error("Error scraping metrics", slog.Any("process", p), slog.Any("error", err))
 				return
 			}
 
@@ -136,7 +137,7 @@ func (s *Scraper) scrapeAndAggregate() {
 
 	wg.Wait()
 	s.collector.updateMetrics(metricsMap)
-	s.log.Info("Metrics scraped and aggregated")
+	log.Info("Metrics scraped and aggregated")
 }
 
 func (s *Scraper) scrapeMetrics(url string) ([]*dto.MetricFamily, error) {
@@ -167,7 +168,7 @@ func (s *Scraper) scrapeMetrics(url string) ([]*dto.MetricFamily, error) {
 		mfList = append(mfList, &mf)
 	}
 
-	//s.log.Debug("Scraped metrics", slog.Any("url", url), slog.Any("metrics", mfList))
+	//log.Debug("Scraped metrics", slog.Any("url", url), slog.Any("metrics", mfList))
 
 	return mfList, nil
 }

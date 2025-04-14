@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"log/slog"
 	"math"
 	"strings"
 
@@ -13,10 +12,9 @@ type histogramCollector struct {
 	desc   *prometheus.Desc
 	mf     *dto.MetricFamily
 	labels []string
-	log    *slog.Logger
 }
 
-func newHistogramCollector(log *slog.Logger, mf *dto.MetricFamily) *histogramCollector {
+func newHistogramCollector(mf *dto.MetricFamily) *histogramCollector {
 	var labelNames []string
 	if len(mf.Metric) > 0 {
 		for _, label := range mf.Metric[0].Label {
@@ -33,7 +31,6 @@ func newHistogramCollector(log *slog.Logger, mf *dto.MetricFamily) *histogramCol
 		),
 		mf:     mf,
 		labels: labelNames,
-		log:    log,
 	}
 }
 
