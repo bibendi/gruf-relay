@@ -13,7 +13,7 @@ import (
 	"github.com/bibendi/gruf-relay/internal/process"
 )
 
-var log = logger.NewPackageLogger("package", "loadbalance")
+var log = logger.AppLogger.With("package", "loadbalance")
 
 type RandomBalancer struct {
 	addChan      chan process.Process

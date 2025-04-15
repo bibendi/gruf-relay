@@ -4,6 +4,7 @@ go 1.24
 
 require (
 	github.com/ilyakaznacheev/cleanenv v1.5.0
+	github.com/lmittmann/tint v1.0.7
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.36.3
 	github.com/prometheus/client_golang v1.22.0

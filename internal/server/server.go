@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-var log = logger.NewPackageLogger("package", "server")
+var log = logger.AppLogger.With("package", "server")
 
 type Server struct {
 	host       string
@@ -24,7 +24,8 @@ type Server struct {
 
 type ServiceHandler func(srv interface{}, stream grpc.ServerStream) error
 
-func NewServer(ctx context.Context, cfg *config.Config, proxy *proxy.Proxy) *Server {
+func NewServer(ctx context.Context, proxy *proxy.Proxy) *Server {
+	cfg := config.AppConfig
 	server := grpc.NewServer(
 		grpc.CustomCodec(codec.Codec()),
 		grpc.UnknownServiceHandler(proxy.HandleRequest),

@@ -20,7 +20,7 @@ import (
 	"github.com/prometheus/common/expfmt"
 )
 
-var log = logger.NewPackageLogger("package", "metrics")
+var log = logger.AppLogger.With("package", "metrics")
 
 type Scraper struct {
 	ctx       context.Context
@@ -32,7 +32,8 @@ type Scraper struct {
 	server    *http.Server
 }
 
-func NewScraper(ctx context.Context, wg *sync.WaitGroup, pm *manager.Manager, cfg *config.Metrics) (*Scraper, error) {
+func NewScraper(ctx context.Context, wg *sync.WaitGroup, pm *manager.Manager) (*Scraper, error) {
+	cfg := config.AppConfig.Metrics
 	client := &http.Client{
 		Timeout: 10 * time.Second, // Add timeout for http requests
 	}

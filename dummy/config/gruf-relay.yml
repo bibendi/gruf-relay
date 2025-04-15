@@ -5,7 +5,7 @@ workers:
   start_port: 9000
   metrics_path: /metrics
 log_level: debug
-log_format: text
+log_format: pretty
 health_check_interval: 5s
 probes:
   enabled: true

@@ -17,7 +17,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-var log = logger.NewPackageLogger("package", "process")
+var log = logger.AppLogger.With("package", "process")
 
 type Process interface {
 	Start() error

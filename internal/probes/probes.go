@@ -16,7 +16,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 )
 
-var log = logger.NewPackageLogger("package", "probes")
+var log = logger.AppLogger.With("package", "probes")
 
 type Probes struct {
 	ctx    context.Context
@@ -25,7 +25,8 @@ type Probes struct {
 	server *http.Server
 }
 
-func NewProbes(ctx context.Context, wg *sync.WaitGroup, cfg *config.Probes, isStarted *atomic.Value, pm *manager.Manager, hc *healthcheck.Checker) *Probes {
+func NewProbes(ctx context.Context, wg *sync.WaitGroup, isStarted *atomic.Value, pm *manager.Manager, hc *healthcheck.Checker) *Probes {
+	cfg := config.AppConfig.Probes
 	mux := http.NewServeMux()
 
 	server := &http.Server{

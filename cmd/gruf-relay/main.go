@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -13,7 +12,7 @@ import (
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/healthcheck"
 	"github.com/bibendi/gruf-relay/internal/loadbalance"
-	"github.com/bibendi/gruf-relay/internal/logger"
+	log "github.com/bibendi/gruf-relay/internal/logger"
 	"github.com/bibendi/gruf-relay/internal/manager"
 	"github.com/bibendi/gruf-relay/internal/metrics"
 	"github.com/bibendi/gruf-relay/internal/probes"
@@ -22,19 +21,9 @@ import (
 )
 
 func main() {
-	// Load configuration
-	cfg, err := config.LoadConfig("config/gruf-relay.yml")
-	if err != nil {
-		panic(fmt.Sprintf("Failed to load config: %s", err))
-	}
-
-	// Initialize Logger
-	log := logger.NewLogger(cfg.LogLevel, cfg.LogFormat)
-	slog.SetDefault(log)
-
+	cfg := config.AppConfig
 	log.Info("Starting gRPC Relay")
-	log.Debug("Configuration loaded")
-	log.Info("Logger initialized", slog.String("level", cfg.LogLevel), slog.String("format", cfg.LogFormat))
+	log.Debug("Configuration loaded", "config", cfg)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
@@ -44,7 +33,7 @@ func main() {
 	isStarted.Store(false)
 
 	// Initialize Process Manager
-	pm := manager.NewManager(ctx, &wg, &cfg.Workers)
+	pm := manager.NewManager(ctx, &wg)
 
 	// Initialize gRPC processes
 	if err := pm.StartAll(); err != nil {
@@ -55,22 +44,23 @@ func main() {
 
 	// Start Load Balancer
 	lb := loadbalance.NewRandomBalancer()
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		lb.Start(ctx)
 	}()
 
 	// Initialize Health Checker
-	hc := healthcheck.NewChecker(ctx, &wg, pm.Processes, cfg, lb)
+	hc := healthcheck.NewChecker(ctx, &wg, pm.Processes, lb)
 	hc.Start()
 
 	if cfg.Probes.Enabled {
-		probes := probes.NewProbes(ctx, &wg, &cfg.Probes, isStarted, pm, hc)
+		probes := probes.NewProbes(ctx, &wg, isStarted, pm, hc)
 		probes.Start()
 	}
 
 	if cfg.Metrics.Enabled {
-		metrics, err := metrics.NewScraper(ctx, &wg, pm, &cfg.Metrics)
+		metrics, err := metrics.NewScraper(ctx, &wg, pm)
 		if err != nil {
 			log.Error("Failed to create scraper", slog.Any("error", err))
 			cancel()
@@ -83,9 +73,9 @@ func main() {
 	grpcProxy := proxy.NewProxy(lb)
 
 	// Initialize gRPC server
-	grpcServer := server.NewServer(ctx, cfg, grpcProxy)
+	grpcServer := server.NewServer(ctx, grpcProxy)
 
-	go handleSignals(grpcServer, log)
+	go handleSignals(grpcServer)
 	isStarted.Store(true)
 
 	if err := grpcServer.Serve(); err != nil {
@@ -97,7 +87,7 @@ func main() {
 	log.Info("Goodbye!")
 }
 
-func handleSignals(server *server.Server, log *slog.Logger) {
+func handleSignals(server *server.Server) {
 	// Graceful shutdown
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)

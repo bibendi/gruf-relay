@@ -2,10 +2,26 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
 )
+
+var AppConfig *Config
+
+func init() {
+	cfgPath, ok := os.LookupEnv("CONFIG_PATH")
+	if !ok {
+		cfgPath = "config/gruf-relay.yml"
+	}
+
+	cfg, err := loadConfig(cfgPath)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to load config: %s", err))
+	}
+	AppConfig = cfg
+}
 
 type Config struct {
 	LogLevel            string        `yaml:"log_level" env:"LOG_LEVEL" env-default:"debug"`
@@ -35,7 +51,7 @@ type Metrics struct {
 	Path    string `yaml:"metrics_path" env:"METRICS_PATH" env-default:"/metrics"`
 }
 
-func LoadConfig(filename string) (*Config, error) {
+func loadConfig(filename string) (*Config, error) {
 	var config Config
 
 	if err := cleanenv.ReadConfig(filename, &config); err != nil {

@@ -17,12 +17,12 @@ import (
 )
 
 var (
+	log = logger.AppLogger.With("package", "proxy")
+
 	downstreamDescForProxying = &grpc.StreamDesc{
 		ServerStreams: true,
 		ClientStreams: true,
 	}
-
-	log = logger.NewPackageLogger("package", "proxy")
 )
 
 type Balancer interface {

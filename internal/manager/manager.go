@@ -11,13 +11,14 @@ import (
 	"github.com/bibendi/gruf-relay/internal/process"
 )
 
-var log = logger.NewPackageLogger("package", "manager")
+var log = logger.AppLogger.With("package", "manager")
 
 type Manager struct {
 	Processes map[string]process.Process
 }
 
-func NewManager(ctx context.Context, wg *sync.WaitGroup, cfg *config.Workers) *Manager {
+func NewManager(ctx context.Context, wg *sync.WaitGroup) *Manager {
+	cfg := config.AppConfig.Workers
 	processes := make(map[string]process.Process, cfg.Count)
 
 	for i := range cfg.Count {

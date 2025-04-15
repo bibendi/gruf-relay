@@ -16,7 +16,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
-var log = logger.NewPackageLogger("package", "healthcheck")
+var log = logger.AppLogger.With("package", "healthcheck")
 
 type Checker struct {
 	processes    map[string]process.Process
@@ -29,7 +29,8 @@ type Checker struct {
 	wg           *sync.WaitGroup
 }
 
-func NewChecker(ctx context.Context, wg *sync.WaitGroup, processes map[string]process.Process, cfg *config.Config, lb *loadbalance.RandomBalancer) *Checker {
+func NewChecker(ctx context.Context, wg *sync.WaitGroup, processes map[string]process.Process, lb *loadbalance.RandomBalancer) *Checker {
+	cfg := config.AppConfig
 	return &Checker{
 		processes:    processes,
 		lb:           lb,
