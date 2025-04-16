@@ -12,13 +12,11 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/bibendi/gruf-relay/internal/logger"
+	log "github.com/bibendi/gruf-relay/internal/logger"
 	"github.com/bibendi/gruf-relay/internal/process"
 )
 
 var (
-	log = logger.AppLogger.With("package", "proxy")
-
 	downstreamDescForProxying = &grpc.StreamDesc{
 		ServerStreams: true,
 		ClientStreams: true,

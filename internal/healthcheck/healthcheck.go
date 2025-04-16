@@ -8,28 +8,28 @@ import (
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/config"
-	"github.com/bibendi/gruf-relay/internal/loadbalance"
-	"github.com/bibendi/gruf-relay/internal/logger"
+	log "github.com/bibendi/gruf-relay/internal/logger"
 	"github.com/bibendi/gruf-relay/internal/process"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
-var log = logger.AppLogger.With("package", "healthcheck")
+type Balancer interface {
+	AddProcess(process.Process)
+	RemoveProcess(process.Process)
+}
 
 type Checker struct {
 	processes    map[string]process.Process
-	lb           *loadbalance.RandomBalancer
+	lb           Balancer
 	interval     time.Duration
 	host         string
 	serverStates map[string]connectivity.State
 	mu           sync.RWMutex
-	ctx          context.Context
-	wg           *sync.WaitGroup
 }
 
-func NewChecker(ctx context.Context, wg *sync.WaitGroup, processes map[string]process.Process, lb *loadbalance.RandomBalancer) *Checker {
+func NewChecker(processes map[string]process.Process, lb Balancer) *Checker {
 	cfg := config.AppConfig
 	return &Checker{
 		processes:    processes,
@@ -37,15 +37,24 @@ func NewChecker(ctx context.Context, wg *sync.WaitGroup, processes map[string]pr
 		interval:     cfg.HealthCheckInterval,
 		host:         cfg.Host,
 		serverStates: make(map[string]connectivity.State),
-		ctx:          ctx,
-		wg:           wg,
 	}
 }
 
-func (c *Checker) Start() {
-	c.wg.Add(1)
-	go c.run()
-	log.Info("Health checker started")
+func (c *Checker) Run(ctx context.Context) {
+	log.Info("Starting Health checking")
+
+	ticker := time.NewTicker(c.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			c.checkAll()
+		case <-ctx.Done():
+			log.Info("Health checker stopped")
+			return
+		}
+	}
 }
 
 func (c *Checker) GetServerState(name string) connectivity.State {
@@ -56,22 +65,6 @@ func (c *Checker) GetServerState(name string) connectivity.State {
 		return connectivity.Shutdown
 	}
 	return state
-}
-
-func (c *Checker) run() {
-	ticker := time.NewTicker(c.interval)
-	defer ticker.Stop()
-	defer c.wg.Done()
-
-	for {
-		select {
-		case <-ticker.C:
-			c.checkAll()
-		case <-c.ctx.Done():
-			log.Info("Health checker stopped")
-			return
-		}
-	}
 }
 
 // TODO: check servers in parallel

@@ -6,74 +6,75 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"sync"
 	"sync/atomic"
 
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/healthcheck"
-	"github.com/bibendi/gruf-relay/internal/logger"
+	log "github.com/bibendi/gruf-relay/internal/logger"
 	"github.com/bibendi/gruf-relay/internal/manager"
 	"google.golang.org/grpc/connectivity"
 )
 
-var log = logger.AppLogger.With("package", "probes")
-
 type Probes struct {
-	ctx    context.Context
-	wg     *sync.WaitGroup
-	port   int
-	server *http.Server
+	port         int
+	appIsStarted *atomic.Value
+	pm           *manager.Manager
+	hc           *healthcheck.Checker
 }
 
-func NewProbes(ctx context.Context, wg *sync.WaitGroup, isStarted *atomic.Value, pm *manager.Manager, hc *healthcheck.Checker) *Probes {
+func NewProbes(isStarted *atomic.Value, pm *manager.Manager, hc *healthcheck.Checker) *Probes {
 	cfg := config.AppConfig.Probes
+
+	probes := &Probes{
+		port:         cfg.Port,
+		pm:           pm,
+		hc:           hc,
+		appIsStarted: isStarted,
+	}
+
+	return probes
+}
+
+func (p *Probes) Serve(ctx context.Context) error {
+	log.Info("Starting probes server", slog.Int("port", p.port))
+
 	mux := http.NewServeMux()
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Port),
+		Addr:    fmt.Sprintf(":%d", p.port),
 		Handler: mux,
 		BaseContext: func(_ net.Listener) context.Context {
 			return ctx
 		},
 	}
 
-	probes := &Probes{
-		ctx:    ctx,
-		wg:     wg,
-		port:   cfg.Port,
-		server: server,
-	}
+	mux.HandleFunc("/startup", p.handleStartupProbe(p.appIsStarted))
+	mux.HandleFunc("/readiness", p.handleReadinessProbe(p.pm, p.hc))
+	mux.HandleFunc("/liveness", p.handleLivenessrobe(p.pm, p.hc))
 
-	mux.HandleFunc("/startup", probes.handleStartupProbe(isStarted))
-	mux.HandleFunc("/readiness", probes.handleReadinessProbe(pm, hc))
-	mux.HandleFunc("/liveness", probes.handleLivenessrobe(pm, hc))
+	errChan := make(chan error, 1)
+	defer close(errChan)
 
-	return probes
-}
+	go func() {
+		if err := server.ListenAndServe(); err != nil {
+			if err != http.ErrServerClosed {
+				log.Error("Probes server failed", slog.Any("error", err))
+				errChan <- err
+			}
+		}
+	}()
 
-func (p *Probes) Start() {
-	p.wg.Add(1)
-	go p.waitCtxDone()
-	go p.run()
-	log.Info("Probes server started", slog.Int("port", p.port))
-}
-
-func (p *Probes) waitCtxDone() {
-	<-p.ctx.Done()
-	log.Info("Stopping probes server")
-	if err := p.server.Shutdown(context.Background()); err != nil {
-		log.Error("Failed to shutdown probes server", slog.Any("err", err))
-	}
-}
-
-func (p *Probes) run() {
-	defer p.wg.Done()
-
-	if err := p.server.ListenAndServe(); err != nil {
-		if err != http.ErrServerClosed {
-			log.Error("Probes server failed", slog.Any("err", err))
+	select {
+	case err := <-errChan:
+		return err
+	case <-ctx.Done():
+		log.Info("Stopping probes server")
+		if err := server.Shutdown(context.Background()); err != nil {
+			log.Error("Failed to shutdown probes server", slog.Any("error", err))
+			return err
 		}
 	}
+	return nil
 }
 
 func (p *Probes) handleStartupProbe(isStarted *atomic.Value) http.HandlerFunc {

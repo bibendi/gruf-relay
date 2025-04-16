@@ -10,7 +10,7 @@ import (
 
 var AppConfig *Config
 
-func init() {
+func MustLoadConfig() *Config {
 	cfgPath, ok := os.LookupEnv("CONFIG_PATH")
 	if !ok {
 		cfgPath = "config/gruf-relay.yml"
@@ -21,6 +21,7 @@ func init() {
 		panic(fmt.Sprintf("Failed to load config: %s", err))
 	}
 	AppConfig = cfg
+	return cfg
 }
 
 type Config struct {

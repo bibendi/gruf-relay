@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/config"
-	"github.com/bibendi/gruf-relay/internal/logger"
+	log "github.com/bibendi/gruf-relay/internal/logger"
 	"github.com/bibendi/gruf-relay/internal/manager"
 	"github.com/bibendi/gruf-relay/internal/process"
 	"github.com/prometheus/client_golang/prometheus"
@@ -20,35 +20,79 @@ import (
 	"github.com/prometheus/common/expfmt"
 )
 
-var log = logger.AppLogger.With("package", "metrics")
-
 type Scraper struct {
-	ctx       context.Context
-	wg        *sync.WaitGroup
 	pm        *manager.Manager
 	interval  time.Duration
 	collector *aggregatedCollector
 	client    *http.Client
-	server    *http.Server
 }
 
-func NewScraper(ctx context.Context, wg *sync.WaitGroup, pm *manager.Manager) (*Scraper, error) {
-	cfg := config.AppConfig.Metrics
+func NewScraper(pm *manager.Manager) *Scraper {
 	client := &http.Client{
 		Timeout: 10 * time.Second, // Add timeout for http requests
 	}
 
+	return &Scraper{
+		pm:        pm,
+		interval:  5 * time.Second,
+		client:    client,
+		collector: newAggregatedCollector(),
+	}
+}
+
+func (s *Scraper) Serve(ctx context.Context) error {
+	log.Info("Starting metrics scraper")
+	ticker := time.NewTicker(s.interval)
+	errChan := make(chan error, 1)
+	defer ticker.Stop()
+	defer close(errChan)
+
+	server, err := newServer(ctx, s.collector)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil {
+			if err != http.ErrServerClosed {
+				log.Error("Metrics server failed", slog.Any("error", err))
+				errChan <- err
+			}
+		}
+	}()
+
+	for {
+		select {
+		case <-errChan:
+			log.Error("Error scraping metrics", slog.Any("error", err))
+			return err
+		case <-ctx.Done():
+			log.Info("Stopping metrics server")
+			err := server.Shutdown(context.Background())
+			if err != nil {
+				log.Error("Failed to shutdown metrics server", slog.Any("error", err))
+			}
+			log.Info("Metrics scraper stopped")
+			return err
+		case <-ticker.C:
+			s.scrapeAndAggregate()
+		}
+	}
+}
+
+func newServer(ctx context.Context, collector *aggregatedCollector) (*http.Server, error) {
 	registry := prometheus.NewRegistry()
-	collector := newAggregatedCollector()
 	if err := registry.Register(collector); err != nil {
 		return nil, fmt.Errorf("failed to register aggregated collector: %w", err)
 	}
+
 	gatherers := prometheus.Gatherers{
 		registry,
 		prometheus.DefaultGatherer,
 	}
 
 	mux := http.NewServeMux()
+	cfg := config.AppConfig.Metrics
 	mux.Handle(cfg.Path, promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{}))
 
 	server := &http.Server{
@@ -59,47 +103,7 @@ func NewScraper(ctx context.Context, wg *sync.WaitGroup, pm *manager.Manager) (*
 		},
 	}
 
-	return &Scraper{
-		ctx:       ctx,
-		wg:        wg,
-		pm:        pm,
-		interval:  5 * time.Second,
-		client:    client,
-		server:    server,
-		collector: collector,
-	}, nil
-}
-
-func (s *Scraper) Start() {
-	s.wg.Add(1)
-	log.Info("Starting metrics scraper")
-	ticker := time.NewTicker(s.interval)
-	defer ticker.Stop()
-	defer s.wg.Done()
-
-	go s.runServer()
-
-	for {
-		select {
-		case <-s.ctx.Done():
-			log.Info("Stopping metrics server")
-			if err := s.server.Shutdown(context.Background()); err != nil {
-				log.Error("Failed to shutdown metrics server", slog.Any("err", err))
-			}
-			log.Info("Metrics scraper stopped")
-			return
-		case <-ticker.C:
-			s.scrapeAndAggregate()
-		}
-	}
-}
-
-func (s *Scraper) runServer() {
-	if err := s.server.ListenAndServe(); err != nil {
-		if err != http.ErrServerClosed {
-			log.Error("Metrics server failed", slog.Any("err", err))
-		}
-	}
+	return server, nil
 }
 
 func (s *Scraper) scrapeAndAggregate() {
@@ -152,7 +156,7 @@ func (s *Scraper) scrapeMetrics(url string) ([]*dto.MetricFamily, error) {
 		return nil, fmt.Errorf("failed to fetch metrics from %s, status code: %d", url, resp.StatusCode)
 	}
 
-	// Create a new decoder.
+	// Create a new decoder
 	decoder := expfmt.NewDecoder(resp.Body, expfmt.FmtText)
 
 	var mfList []*dto.MetricFamily

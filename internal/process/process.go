@@ -12,15 +12,13 @@ import (
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/codec"
-	"github.com/bibendi/gruf-relay/internal/logger"
+	log "github.com/bibendi/gruf-relay/internal/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-var log = logger.AppLogger.With("package", "process")
-
 type Process interface {
-	Start() error
+	Run(context.Context) error
 	IsRunning() bool
 	String() string
 	Addr() string
@@ -33,10 +31,8 @@ type processImpl struct {
 	port        int
 	metricsPort int
 	metricsPath string
-	log         *slog.Logger
+	log         log.Logger
 	client      *grpc.ClientConn
-	ctx         context.Context
-	wg          *sync.WaitGroup
 	cmd         *exec.Cmd
 	mu          sync.Mutex
 	running     bool
@@ -44,15 +40,13 @@ type processImpl struct {
 	cmdDoneChan chan error
 }
 
-func NewProcess(ctx context.Context, wg *sync.WaitGroup, name string, port, metricsPort int, metricsPath string) Process {
+func NewProcess(name string, port, metricsPort int, metricsPath string) Process {
 	logger := log.With(slog.String("process", name))
 	return &processImpl{
 		Name:        name,
 		port:        port,
 		metricsPort: metricsPort,
 		metricsPath: metricsPath,
-		ctx:         ctx,
-		wg:          wg,
 		cmdDoneChan: make(chan error, 1),
 		log:         logger,
 	}
@@ -70,10 +64,14 @@ func (p *processImpl) MetricsAddr() string {
 	return fmt.Sprintf("0.0.0.0:%d%s", p.metricsPort, p.metricsPath)
 }
 
-func (p *processImpl) Start() error {
-	p.wg.Add(1)
-	go p.waitCtxDone()
+func (p *processImpl) Run(ctx context.Context) error {
 	if err := p.start(); err != nil {
+		return err
+	}
+
+	<-ctx.Done()
+	if err := p.shoutdown(); err != nil {
+		p.log.Error("Failed to shutdown server", slog.Any("error", err))
 		return err
 	}
 	return nil
@@ -87,6 +85,8 @@ func (p *processImpl) start() error {
 		p.log.Error("Server is already running")
 		return nil
 	}
+
+	p.log.Info("Starting server")
 
 	p.client = nil
 
@@ -130,7 +130,6 @@ func (p *processImpl) GetClient() (*grpc.ClientConn, error) {
 func (p *processImpl) shoutdown() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	defer p.wg.Done()
 
 	p.log.Info("Stopping server")
 	p.stopping = true
@@ -174,14 +173,6 @@ func (p *processImpl) shoutdown() error {
 	}
 
 	return nil
-}
-
-func (p *processImpl) waitCtxDone() {
-	<-p.ctx.Done()
-
-	if err := p.shoutdown(); err != nil {
-		p.log.Error("Failed to shutdown server", slog.Any("error", err))
-	}
 }
 
 func (p *processImpl) waitCmdDone() {

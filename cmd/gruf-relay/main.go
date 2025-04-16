@@ -21,78 +21,99 @@ import (
 )
 
 func main() {
-	cfg := config.AppConfig
+	cfg := config.MustLoadConfig()
+	log := log.MustInitLogger()
+
 	log.Info("Starting gRPC Relay")
-	log.Debug("Configuration loaded", "config", cfg)
+	log.Debug("Configuration loaded")
+	log.Info("Logger initialized", "level", cfg.LogLevel)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 
-	// Initialize probes
+	// Initialize readiness probe
 	isStarted := &atomic.Value{}
 	isStarted.Store(false)
 
-	// Initialize Process Manager
+	// Run Process Manager
 	pm := manager.NewManager(ctx, &wg)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := pm.Run(ctx); err != nil {
+			log.Error("Failed to start servers", slog.Any("error", err))
+			cancel()
+		}
+	}()
 
-	// Initialize gRPC processes
-	if err := pm.StartAll(); err != nil {
-		log.Error("Failed to start servers", slog.Any("error", err))
-		cancel()
-		os.Exit(1)
-	}
-
-	// Start Load Balancer
+	// Run Load Balancer
 	lb := loadbalance.NewRandomBalancer()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		lb.Start(ctx)
+		lb.Run(ctx)
 	}()
 
-	// Initialize Health Checker
-	hc := healthcheck.NewChecker(ctx, &wg, pm.Processes, lb)
-	hc.Start()
+	// Run Health Checker
+	hc := healthcheck.NewChecker(pm.Processes, lb)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		hc.Run(ctx)
+	}()
 
+	// Run probes
 	if cfg.Probes.Enabled {
-		probes := probes.NewProbes(ctx, &wg, isStarted, pm, hc)
-		probes.Start()
+		probes := probes.NewProbes(isStarted, pm, hc)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := probes.Serve(ctx); err != nil {
+				log.Error("Failed to serve probes", slog.Any("error", err))
+				cancel()
+			}
+		}()
 	}
 
+	// Run metrics
 	if cfg.Metrics.Enabled {
-		metrics, err := metrics.NewScraper(ctx, &wg, pm)
-		if err != nil {
-			log.Error("Failed to create scraper", slog.Any("error", err))
-			cancel()
-			os.Exit(1)
-		}
-		go metrics.Start()
+		metrics := metrics.NewScraper(pm)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := metrics.Serve(ctx); err != nil {
+				log.Error("Failed to serve metrics", slog.Any("error", err))
+				cancel()
+			}
+		}()
 	}
 
-	// Initialize gRPC Proxy
+	// Run gRPC server
 	grpcProxy := proxy.NewProxy(lb)
+	grpcServer := server.NewServer(grpcProxy)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := grpcServer.Serve(ctx); err != nil {
+			log.Error("Failed to serve gRPC requests", slog.Any("error", err))
+			cancel()
+		}
+	}()
 
-	// Initialize gRPC server
-	grpcServer := server.NewServer(ctx, grpcProxy)
-
-	go handleSignals(grpcServer)
+	// Ready to work!
 	isStarted.Store(true)
 
-	if err := grpcServer.Serve(); err != nil {
-		log.Error("Failed to serve gRPC server", slog.Any("error", err))
-	}
-
-	cancel()
-	wg.Wait()
-	log.Info("Goodbye!")
-}
-
-func handleSignals(server *server.Server) {
-	// Graceful shutdown
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
-	<-signalCh
-	log.Info("Received termination signal, initiating graceful shutdown...")
-	server.Shoutdown()
+	select {
+	case <-ctx.Done():
+	case sig := <-signalCh:
+		log.Info("Received termination signal, initiating graceful shutdown...", slog.Any("signal", sig))
+		cancel()
+	}
+
+	wg.Wait()
+
+	log.Info("Goodbye!")
 }

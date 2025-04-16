@@ -9,11 +9,9 @@ import (
 
 	"slices"
 
-	"github.com/bibendi/gruf-relay/internal/logger"
+	log "github.com/bibendi/gruf-relay/internal/logger"
 	"github.com/bibendi/gruf-relay/internal/process"
 )
-
-var log = logger.AppLogger.With("package", "loadbalance")
 
 type RandomBalancer struct {
 	addChan      chan process.Process
@@ -33,7 +31,7 @@ func NewRandomBalancer() *RandomBalancer {
 	return rb
 }
 
-func (rb *RandomBalancer) Start(ctx context.Context) {
+func (rb *RandomBalancer) Run(ctx context.Context) {
 	log.Info("Starting load balancer")
 
 	for {

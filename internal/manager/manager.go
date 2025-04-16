@@ -7,11 +7,9 @@ import (
 	"sync"
 
 	"github.com/bibendi/gruf-relay/internal/config"
-	"github.com/bibendi/gruf-relay/internal/logger"
+	log "github.com/bibendi/gruf-relay/internal/logger"
 	"github.com/bibendi/gruf-relay/internal/process"
 )
-
-var log = logger.AppLogger.With("package", "manager")
 
 type Manager struct {
 	Processes map[string]process.Process
@@ -25,7 +23,7 @@ func NewManager(ctx context.Context, wg *sync.WaitGroup) *Manager {
 		name := fmt.Sprintf("worker-%d", i+1)
 		port := cfg.StartPort + i
 		metricsPort := port + 100
-		processes[name] = process.NewProcess(ctx, wg, name, port, metricsPort, cfg.MetricsPath)
+		processes[name] = process.NewProcess(name, port, metricsPort, cfg.MetricsPath)
 	}
 
 	return &Manager{
@@ -33,18 +31,24 @@ func NewManager(ctx context.Context, wg *sync.WaitGroup) *Manager {
 	}
 }
 
-func (m *Manager) StartAll() error {
+func (m *Manager) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
+
+	log.Info("Starting manager", slog.Int("servers_count", len(m.Processes)))
 	errChan := make(chan error, 1)
 	defer close(errChan)
+
+	errCtx, cancel := context.WithCancel(ctx)
 
 	for _, p := range m.Processes {
 		wg.Add(1)
 		go func(p process.Process) {
 			defer wg.Done()
-			if err := p.Start(); err != nil {
+			if err := p.Run(errCtx); err != nil {
 				select {
 				case errChan <- err:
+					log.Error("Failed to run server", slog.Any("error", err), slog.Any("server", p))
+					cancel()
 				default:
 				}
 			}
@@ -58,8 +62,6 @@ func (m *Manager) StartAll() error {
 		return err
 	default:
 	}
-
-	log.Info("All servers started", slog.Int("count", len(m.Processes)))
 
 	return nil
 }

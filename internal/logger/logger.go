@@ -12,6 +12,20 @@ import (
 
 var AppLogger Logger
 
+type LogFormat string
+
+const (
+	LogFormatJSON   LogFormat = "json"
+	LogFormatText   LogFormat = "text"
+	LogFormatPretty LogFormat = "pretty"
+)
+
+var formatMap = map[string]LogFormat{
+	"json":   LogFormatJSON,
+	"text":   LogFormatText,
+	"pretty": LogFormatPretty,
+}
+
 var levelMap = map[string]slog.Level{
 	"debug": slog.LevelDebug,
 	"info":  slog.LevelInfo,
@@ -19,9 +33,25 @@ var levelMap = map[string]slog.Level{
 	"error": slog.LevelError,
 }
 
-func init() {
-	AppLogger = newLogger()
-	slog.SetDefault(AppLogger.(*slog.Logger))
+func MustInitLogger() Logger {
+	level := config.AppConfig.LogLevel
+	logLevel, ok := levelMap[level]
+	if !ok {
+		panic(fmt.Sprintf("Invalid log level: %s", level))
+	}
+
+	format := config.AppConfig.LogFormat
+	logFormat, ok := formatMap[format]
+	if !ok {
+		panic(fmt.Sprintf("Invalid log format: %s", format))
+	}
+	logger, err := NewLogger(logLevel, logFormat)
+	if err != nil {
+		panic(err)
+	}
+	AppLogger = logger
+	slog.SetDefault(logger.(*slog.Logger))
+	return logger
 }
 
 type Logger interface {
@@ -36,33 +66,33 @@ type Logger interface {
 	Handler() slog.Handler
 }
 
-func newLogger() Logger {
-	level := config.AppConfig.LogLevel
-	logLevel, ok := levelMap[level]
-	if !ok {
-		panic(fmt.Sprintf("Invalid log level: %s", level))
-	}
-
+func NewLogger(level slog.Level, format LogFormat) (Logger, error) {
 	handlerOpts := &slog.HandlerOptions{
-		Level: logLevel,
+		Level: level,
 	}
 
-	format := config.AppConfig.LogFormat
 	var handler slog.Handler
 	switch format {
-	case "json":
+	case LogFormatJSON:
 		handler = slog.NewJSONHandler(os.Stdout, handlerOpts)
-	case "text":
+	case LogFormatText:
 		handler = slog.NewTextHandler(os.Stdout, handlerOpts)
-	case "pretty":
+	case LogFormatPretty:
 		handler = tint.NewHandler(os.Stdout, nil)
 	default:
-		panic(fmt.Sprintf("Invalid log format: %s", format))
+		return nil, fmt.Errorf("invalid log format: %s", format)
 	}
 
 	logger := slog.New(handler)
+	return logger, nil
+}
 
-	return logger
+func With(args ...any) Logger {
+	return AppLogger.With(args...)
+}
+
+func WithGroup(name string) Logger {
+	return AppLogger.WithGroup(name)
 }
 
 func Debug(msg string, args ...any) {

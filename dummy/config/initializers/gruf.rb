@@ -29,3 +29,5 @@ end
 Metrics::Gruf::MetricsSubscriber.subscribe(
   metrics: true
 )
+
+# raise "Chaos testing!" if rand(2) == 0

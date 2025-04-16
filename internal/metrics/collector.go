@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	log "github.com/bibendi/gruf-relay/internal/logger"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 )
