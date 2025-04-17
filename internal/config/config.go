@@ -10,10 +10,12 @@ import (
 
 var AppConfig *Config
 
+var defaultConfigPath = "config/gruf-relay.yml"
+
 func MustLoadConfig() *Config {
 	cfgPath, ok := os.LookupEnv("CONFIG_PATH")
 	if !ok {
-		cfgPath = "config/gruf-relay.yml"
+		cfgPath = defaultConfigPath
 	}
 
 	cfg, err := loadConfig(cfgPath)

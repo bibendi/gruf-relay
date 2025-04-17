@@ -15,10 +15,12 @@ func TestConfig(t *testing.T) {
 }
 
 var _ = Describe("Config", func() {
-	Describe("LoadConfig", func() {
+	Describe("MustLoadConfig", func() {
+		var originalConfigPath string
 		var content []byte
 
 		BeforeEach(func() {
+			originalConfigPath = defaultConfigPath
 			content = []byte(`
 log_level: info
 log_format: json
@@ -39,6 +41,11 @@ metrics:
 `)
 		})
 
+		AfterEach(func() {
+			defaultConfigPath = originalConfigPath
+			AppConfig = nil
+		})
+
 		It("should load config from file", func() {
 			tmpfile, err := os.CreateTemp("", "config-*.yaml")
 			Expect(err).NotTo(HaveOccurred())
@@ -48,14 +55,50 @@ metrics:
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tmpfile.Close()).NotTo(HaveOccurred())
 
-			cfg, err := LoadConfig(tmpfile.Name())
-			Expect(err).NotTo(HaveOccurred())
+			defaultConfigPath = tmpfile.Name()
+			cfg := MustLoadConfig()
 			Expect(cfg).NotTo(BeNil())
+
+			Expect(cfg.LogLevel).To(Equal("info"))
+			Expect(cfg.LogFormat).To(Equal("json"))
+			Expect(cfg.Host).To(Equal("127.0.0.1"))
+			Expect(cfg.Port).To(Equal(8081))
+			Expect(cfg.HealthCheckInterval).To(Equal(10 * time.Second))
+
+			Expect(cfg.Workers.Count).To(Equal(4))
+			Expect(cfg.Workers.StartPort).To(Equal(9001))
+			Expect(cfg.Workers.MetricsPath).To(Equal("/worker-metrics"))
+
+			Expect(cfg.Probes.Enabled).To(BeTrue())
+			Expect(cfg.Probes.Port).To(Equal(5556))
+
+			Expect(cfg.Metrics.Enabled).To(BeTrue())
+			Expect(cfg.Metrics.Port).To(Equal(9395))
+			Expect(cfg.Metrics.Path).To(Equal("/app-metrics"))
 		})
 
-		It("should return error for invalid file", func() {
-			_, err := LoadConfig("nonexistent.yaml")
-			Expect(err).To(HaveOccurred())
+		It("should panic if config file does not exist", func() {
+			defaultConfigPath = "nonexistent_config.yaml"
+
+			Expect(func() {
+				MustLoadConfig()
+			}).To(Panic())
+		})
+
+		It("should load config from env variable CONFIG_PATH", func() {
+			tmpfile, err := os.CreateTemp("", "env-config-*.yaml")
+			Expect(err).NotTo(HaveOccurred())
+			defer os.Remove(tmpfile.Name())
+
+			_, err = tmpfile.Write(content)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tmpfile.Close()).NotTo(HaveOccurred())
+			os.Setenv("CONFIG_PATH", tmpfile.Name())
+			defer os.Unsetenv("CONFIG_PATH")
+
+			cfg := MustLoadConfig()
+			Expect(cfg).NotTo(BeNil())
+			Expect(cfg.LogLevel).To(Equal("info"))
 		})
 	})
 
