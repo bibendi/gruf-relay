@@ -3,6 +3,7 @@ package logger
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 
@@ -45,7 +46,7 @@ func MustInitLogger() Logger {
 	if !ok {
 		panic(fmt.Sprintf("Invalid log format: %s", format))
 	}
-	logger, err := NewLogger(logLevel, logFormat)
+	logger, err := newLogger(os.Stdout, logLevel, logFormat)
 	if err != nil {
 		panic(err)
 	}
@@ -66,19 +67,23 @@ type Logger interface {
 	Handler() slog.Handler
 }
 
-func NewLogger(level slog.Level, format LogFormat) (Logger, error) {
+func newLogger(w io.Writer, level slog.Level, format LogFormat) (Logger, error) {
 	handlerOpts := &slog.HandlerOptions{
 		Level: level,
+	}
+
+	if w == nil {
+		w = os.Stdout
 	}
 
 	var handler slog.Handler
 	switch format {
 	case LogFormatJSON:
-		handler = slog.NewJSONHandler(os.Stdout, handlerOpts)
+		handler = slog.NewJSONHandler(w, handlerOpts)
 	case LogFormatText:
-		handler = slog.NewTextHandler(os.Stdout, handlerOpts)
+		handler = slog.NewTextHandler(w, handlerOpts)
 	case LogFormatPretty:
-		handler = tint.NewHandler(os.Stdout, nil)
+		handler = tint.NewHandler(w, nil)
 	default:
 		return nil, fmt.Errorf("invalid log format: %s", format)
 	}

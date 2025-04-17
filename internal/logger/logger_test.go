@@ -2,67 +2,98 @@ package logger
 
 import (
 	"bytes"
-	"context"
-	"fmt"
 	"log/slog"
 	"os"
-	"strings"
+	"testing"
 
+	"github.com/bibendi/gruf-relay/internal/config"
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/onsi/ginkgo/v2/dsl/table"
 	. "github.com/onsi/gomega"
 )
 
+func TestLogger(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Logger Suite")
+}
+
 var _ = Describe("Logger", func() {
-	Describe("NewLogger", func() {
+	Describe("MustInitLogger", func() {
 		var (
-			oldStdout *os.File
-			r         *os.File
-			w         *os.File
+			originalConfig *config.Config
 		)
 
 		BeforeEach(func() {
-			// Redirect stdout to capture log output
-			oldStdout = os.Stdout
-			r, w, _ = os.Pipe()
-			os.Stdout = w
+			originalConfig = config.AppConfig
+			DeferCleanup(func() {
+				config.AppConfig = originalConfig
+			})
 		})
 
-		AfterEach(func() {
-			// Restore stdout
-			w.Close()
-			os.Stdout = oldStdout
-			// Reset default logger to avoid interference
-			slog.SetDefault(slog.Default())
+		It("should panic on invalid log level", func() {
+			config.AppConfig = &config.Config{LogLevel: "invalid"}
+			Expect(func() { MustInitLogger() }).To(Panic())
 		})
 
-		table.DescribeTable("Logger configurations",
-			func(level string, format string, expectedJSON bool, shouldPanic bool) {
-				if shouldPanic {
-					Expect(func() { NewLogger(level, format) }).Should(Panic())
-				} else {
-					logger := NewLogger(level, format)
-					logger.Log(context.Background(), slog.LevelInfo, "Test log message")
+		It("should panic on invalid log format", func() {
+			config.AppConfig = &config.Config{LogFormat: "invalid"}
+			Expect(func() { MustInitLogger() }).To(Panic())
+		})
 
-					var buf bytes.Buffer
-					buf.ReadFrom(r)
-					output := buf.String()
+		It("should return a Logger instance", func() {
+			config.AppConfig = &config.Config{LogLevel: "debug", LogFormat: "json"}
+			l := MustInitLogger()
+			Expect(l).NotTo(BeNil())
+		})
 
-					Expect(output).ShouldNot(BeEmpty(), "Expected log output")
-					Expect(strings.Contains(output, "Test log message")).Should(BeTrue(), "Expected log message in output")
-					Expect(isJSON(output)).Should(Equal(expectedJSON), fmt.Sprintf("Expected JSON format: %v", expectedJSON))
-				}
-			},
-			table.Entry("Valid JSON Debug", "debug", "json", true, false),
-			table.Entry("Valid Text Info", "info", "text", false, false),
-			table.Entry("Valid JSON Warn", "warn", "json", true, false),
-			table.Entry("Valid Text Error", "error", "text", false, false),
-			table.Entry("Invalid Level", "invalid", "json", false, true),
-			table.Entry("Invalid Format", "info", "invalid", false, true),
-		)
+		It("should set the global AppLogger and slog default", func() {
+			config.AppConfig = &config.Config{LogLevel: "info", LogFormat: "text"}
+			l := MustInitLogger()
+			Expect(AppLogger).To(Equal(l))
+		})
+	})
+
+	Describe("newLogger", func() {
+		It("should create a JSON logger", func() {
+			buffer := &bytes.Buffer{}
+			l, err := newLogger(buffer, slog.LevelInfo, LogFormatJSON)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(l).NotTo(BeNil())
+
+			l.Info("test message", "key", "value")
+			output := buffer.String()
+			Expect(output).To(ContainSubstring(`"msg":"test message"`))
+			Expect(output).To(ContainSubstring(`"key":"value"`))
+		})
+
+		It("should create a Text logger", func() {
+			buffer := &bytes.Buffer{}
+			l, err := newLogger(buffer, slog.LevelInfo, LogFormatText)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(l).NotTo(BeNil())
+
+			l.Info("test message", "key", "value")
+			output := buffer.String()
+			Expect(output).To(ContainSubstring(`msg="test message"`))
+			Expect(output).To(ContainSubstring("key=value"))
+		})
+
+		It("should create a Pretty logger", func() {
+			buffer := &bytes.Buffer{}
+			l, err := newLogger(buffer, slog.LevelInfo, LogFormatPretty)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(l).NotTo(BeNil())
+
+			l.Info("test message", "key", "value")
+			output := buffer.String()
+			Expect(output).To(ContainSubstring("test message"))
+			Expect(output).To(ContainSubstring("key"))
+			Expect(output).To(ContainSubstring("value"))
+		})
+
+		It("should return an error for an invalid log format", func() {
+			_, err := newLogger(os.Stdout, slog.LevelInfo, LogFormat("invalid"))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid log format"))
+		})
 	})
 })
-
-func isJSON(s string) bool {
-	return strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}\n")
-}
