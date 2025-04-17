@@ -18,12 +18,8 @@ func TestLogger(t *testing.T) {
 
 var _ = Describe("Logger", func() {
 	Describe("MustInitLogger", func() {
-		var (
-			originalConfig *config.Config
-		)
-
 		BeforeEach(func() {
-			originalConfig = config.AppConfig
+			originalConfig := config.AppConfig
 			DeferCleanup(func() {
 				config.AppConfig = originalConfig
 			})

@@ -1,3 +1,5 @@
+//go:generate mockgen -source=process.go -destination=mock_process.go -package=process
+
 package process
 
 import (
@@ -52,14 +54,17 @@ func NewProcess(name string, port, metricsPort int, metricsPath string) Process 
 	}
 }
 
+// String returns the name of the process.
 func (p *processImpl) String() string {
 	return p.Name
 }
 
+// Addr returns the address the process is listening on.
 func (p *processImpl) Addr() string {
 	return fmt.Sprintf("0.0.0.0:%d", p.port)
 }
 
+// MetricsAddr returns the address the process is serving metrics on.
 func (p *processImpl) MetricsAddr() string {
 	return fmt.Sprintf("0.0.0.0:%d%s", p.metricsPort, p.metricsPath)
 }

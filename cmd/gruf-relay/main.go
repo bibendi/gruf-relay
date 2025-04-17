@@ -36,7 +36,7 @@ func main() {
 	isStarted.Store(false)
 
 	// Run Process Manager
-	pm := manager.NewManager(ctx, &wg)
+	pm := manager.NewManager()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
