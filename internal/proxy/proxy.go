@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	log "github.com/bibendi/gruf-relay/internal/logger"
+	"github.com/bibendi/gruf-relay/internal/log"
 	"github.com/bibendi/gruf-relay/internal/process"
 )
 

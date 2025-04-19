@@ -9,7 +9,7 @@ import (
 
 	"slices"
 
-	log "github.com/bibendi/gruf-relay/internal/logger"
+	"github.com/bibendi/gruf-relay/internal/log"
 	"github.com/bibendi/gruf-relay/internal/process"
 )
 

@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/codec"
-	log "github.com/bibendi/gruf-relay/internal/logger"
+	"github.com/bibendi/gruf-relay/internal/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -43,7 +43,7 @@ type processImpl struct {
 }
 
 func NewProcess(name string, port, metricsPort int, metricsPath string) Process {
-	logger := log.With(slog.String("process", name))
+	logger := log.With(slog.String("worker", name))
 	return &processImpl{
 		Name:        name,
 		port:        port,
@@ -54,17 +54,14 @@ func NewProcess(name string, port, metricsPort int, metricsPath string) Process 
 	}
 }
 
-// String returns the name of the process.
 func (p *processImpl) String() string {
 	return p.Name
 }
 
-// Addr returns the address the process is listening on.
 func (p *processImpl) Addr() string {
 	return fmt.Sprintf("0.0.0.0:%d", p.port)
 }
 
-// MetricsAddr returns the address the process is serving metrics on.
 func (p *processImpl) MetricsAddr() string {
 	return fmt.Sprintf("0.0.0.0:%d%s", p.metricsPort, p.metricsPath)
 }
@@ -221,6 +218,7 @@ func (p *processImpl) buildCmd() *exec.Cmd {
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, fmt.Sprintf("PROMETHEUS_EXPORTER_PORT=%d", p.metricsPort))
 	cmd.Env = append(cmd.Env, fmt.Sprintf("PROMETHEUS_EXPORTER_PATH=%s", p.metricsPath))
+	p.log.Debug("Command built", "command", cmd)
 	return cmd
 }
 

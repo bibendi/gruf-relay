@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/bibendi/gruf-relay/internal/config"
-	log "github.com/bibendi/gruf-relay/internal/logger"
+	"github.com/bibendi/gruf-relay/internal/log"
 	"github.com/bibendi/gruf-relay/internal/process"
 	"github.com/onsi/ginkgo/v2"
 )
@@ -16,8 +16,7 @@ type Manager struct {
 	Processes map[string]process.Process
 }
 
-func NewManager() *Manager {
-	cfg := config.AppConfig.Workers
+func NewManager(cfg config.Workers) *Manager {
 	processes := make(map[string]process.Process, cfg.Count)
 
 	for i := range cfg.Count {
@@ -34,6 +33,7 @@ func NewManager() *Manager {
 
 func (m *Manager) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
+	defer wg.Wait()
 
 	log.Info("Starting manager", slog.Int("servers_count", len(m.Processes)))
 	errChan := make(chan error, 1)
@@ -56,14 +56,12 @@ func (m *Manager) Run(ctx context.Context) error {
 		}(p)
 	}
 
-	cancel()
-	wg.Wait()
-
+	var err error
 	select {
-	case err := <-errChan:
-		return err
-	default:
+	case err = <-errChan:
+	case <-ctx.Done():
 	}
 
-	return nil
+	cancel()
+	return err
 }

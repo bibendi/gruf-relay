@@ -24,6 +24,7 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/pprof v0.0.0-20250403155104-27863c87afa6 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
+	github.com/lithammer/dedent v1.1.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect

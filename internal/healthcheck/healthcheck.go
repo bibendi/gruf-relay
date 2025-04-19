@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/config"
-	log "github.com/bibendi/gruf-relay/internal/logger"
+	"github.com/bibendi/gruf-relay/internal/log"
 	"github.com/bibendi/gruf-relay/internal/process"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
@@ -24,18 +24,15 @@ type Checker struct {
 	processes    map[string]process.Process
 	lb           Balancer
 	interval     time.Duration
-	host         string
 	serverStates map[string]connectivity.State
 	mu           sync.RWMutex
 }
 
-func NewChecker(processes map[string]process.Process, lb Balancer) *Checker {
-	cfg := config.AppConfig
+func NewChecker(cfg config.HealthCheck, processes map[string]process.Process, lb Balancer) *Checker {
 	return &Checker{
 		processes:    processes,
 		lb:           lb,
-		interval:     cfg.HealthCheckInterval,
-		host:         cfg.Host,
+		interval:     cfg.Interval,
 		serverStates: make(map[string]connectivity.State),
 	}
 }
@@ -51,7 +48,7 @@ func (c *Checker) Run(ctx context.Context) {
 		case <-ticker.C:
 			c.checkAll()
 		case <-ctx.Done():
-			log.Info("Health checker stopped")
+			log.Info("Stopping health checker")
 			return
 		}
 	}

@@ -1,4 +1,4 @@
-package logger
+package log
 
 import (
 	"bytes"
@@ -18,33 +18,31 @@ func TestLogger(t *testing.T) {
 
 var _ = Describe("Logger", func() {
 	Describe("MustInitLogger", func() {
+		var logCfg config.Log
+
 		BeforeEach(func() {
-			originalConfig := config.AppConfig
+			logCfg = config.Log{
+				Level:  "info",
+				Format: "text",
+			}
+
 			DeferCleanup(func() {
-				config.AppConfig = originalConfig
+				MustInitLogger(config.DefaultConfig().Log)
 			})
 		})
 
 		It("should panic on invalid log level", func() {
-			config.AppConfig = &config.Config{LogLevel: "invalid"}
-			Expect(func() { MustInitLogger() }).To(Panic())
+			logCfg.Level = "invalid"
+			Expect(func() { MustInitLogger(logCfg) }).To(Panic())
 		})
 
 		It("should panic on invalid log format", func() {
-			config.AppConfig = &config.Config{LogFormat: "invalid"}
-			Expect(func() { MustInitLogger() }).To(Panic())
+			logCfg.Format = "invalid"
+			Expect(func() { MustInitLogger(logCfg) }).To(Panic())
 		})
 
 		It("should return a Logger instance", func() {
-			config.AppConfig = &config.Config{LogLevel: "debug", LogFormat: "json"}
-			l := MustInitLogger()
-			Expect(l).NotTo(BeNil())
-		})
-
-		It("should set the global AppLogger and slog default", func() {
-			config.AppConfig = &config.Config{LogLevel: "info", LogFormat: "text"}
-			l := MustInitLogger()
-			Expect(AppLogger).To(Equal(l))
+			Expect(MustInitLogger(logCfg)).NotTo(BeNil())
 		})
 	})
 

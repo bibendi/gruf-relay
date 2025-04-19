@@ -10,7 +10,7 @@ import (
 
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/healthcheck"
-	log "github.com/bibendi/gruf-relay/internal/logger"
+	"github.com/bibendi/gruf-relay/internal/log"
 	"github.com/bibendi/gruf-relay/internal/manager"
 	"google.golang.org/grpc/connectivity"
 )
@@ -22,9 +22,7 @@ type Probes struct {
 	hc           *healthcheck.Checker
 }
 
-func NewProbes(isStarted *atomic.Value, pm *manager.Manager, hc *healthcheck.Checker) *Probes {
-	cfg := config.AppConfig.Probes
-
+func NewProbes(cfg config.Probes, isStarted *atomic.Value, pm *manager.Manager, hc *healthcheck.Checker) *Probes {
 	probes := &Probes{
 		port:         cfg.Port,
 		pm:           pm,

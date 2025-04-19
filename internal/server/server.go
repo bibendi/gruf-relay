@@ -8,7 +8,7 @@ import (
 
 	"github.com/bibendi/gruf-relay/internal/codec"
 	"github.com/bibendi/gruf-relay/internal/config"
-	log "github.com/bibendi/gruf-relay/internal/logger"
+	"github.com/bibendi/gruf-relay/internal/log"
 	"github.com/bibendi/gruf-relay/internal/proxy"
 	"google.golang.org/grpc"
 )
@@ -21,9 +21,7 @@ type Server struct {
 
 type ServiceHandler func(srv interface{}, stream grpc.ServerStream) error
 
-func NewServer(proxy *proxy.Proxy) *Server {
-	cfg := config.AppConfig
-
+func NewServer(cfg config.Server, proxy *proxy.Proxy) *Server {
 	return &Server{
 		host:  cfg.Host,
 		port:  cfg.Port,

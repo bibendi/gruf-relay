@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/config"
-	log "github.com/bibendi/gruf-relay/internal/logger"
+	"github.com/bibendi/gruf-relay/internal/log"
 	"github.com/bibendi/gruf-relay/internal/manager"
 	"github.com/bibendi/gruf-relay/internal/process"
 	"github.com/prometheus/client_golang/prometheus"
@@ -23,18 +23,22 @@ import (
 type Scraper struct {
 	pm        *manager.Manager
 	interval  time.Duration
+	port      int
+	path      string
 	collector *aggregatedCollector
 	client    *http.Client
 }
 
-func NewScraper(pm *manager.Manager) *Scraper {
+func NewScraper(cfg config.Metrics, pm *manager.Manager) *Scraper {
 	client := &http.Client{
 		Timeout: 10 * time.Second, // Add timeout for http requests
 	}
 
 	return &Scraper{
 		pm:        pm,
-		interval:  5 * time.Second,
+		interval:  cfg.Interval,
+		port:      cfg.Port,
+		path:      cfg.Path,
 		client:    client,
 		collector: newAggregatedCollector(),
 	}
@@ -47,7 +51,7 @@ func (s *Scraper) Serve(ctx context.Context) error {
 	defer ticker.Stop()
 	defer close(errChan)
 
-	server, err := newServer(ctx, s.collector)
+	server, err := newServer(ctx, s.port, s.path, s.collector)
 	if err != nil {
 		return err
 	}
@@ -72,15 +76,14 @@ func (s *Scraper) Serve(ctx context.Context) error {
 			if err != nil {
 				log.Error("Failed to shutdown metrics server", slog.Any("error", err))
 			}
-			log.Info("Metrics scraper stopped")
-			return err
+			return nil
 		case <-ticker.C:
 			s.scrapeAndAggregate()
 		}
 	}
 }
 
-func newServer(ctx context.Context, collector *aggregatedCollector) (*http.Server, error) {
+func newServer(ctx context.Context, port int, path string, collector *aggregatedCollector) (*http.Server, error) {
 	registry := prometheus.NewRegistry()
 	if err := registry.Register(collector); err != nil {
 		return nil, fmt.Errorf("failed to register aggregated collector: %w", err)
@@ -92,11 +95,10 @@ func newServer(ctx context.Context, collector *aggregatedCollector) (*http.Serve
 	}
 
 	mux := http.NewServeMux()
-	cfg := config.AppConfig.Metrics
-	mux.Handle(cfg.Path, promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{}))
+	mux.Handle(path, promhttp.HandlerFor(gatherers, promhttp.HandlerOpts{}))
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Port),
+		Addr:    fmt.Sprintf(":%d", port),
 		Handler: mux,
 		BaseContext: func(_ net.Listener) context.Context {
 			return ctx

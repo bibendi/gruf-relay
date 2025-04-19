@@ -12,7 +12,7 @@ import (
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/healthcheck"
 	"github.com/bibendi/gruf-relay/internal/loadbalance"
-	log "github.com/bibendi/gruf-relay/internal/logger"
+	"github.com/bibendi/gruf-relay/internal/log"
 	"github.com/bibendi/gruf-relay/internal/manager"
 	"github.com/bibendi/gruf-relay/internal/metrics"
 	"github.com/bibendi/gruf-relay/internal/probes"
@@ -21,12 +21,11 @@ import (
 )
 
 func main() {
-	cfg := config.MustLoadConfig()
-	log := log.MustInitLogger()
-
 	log.Info("Starting gRPC Relay")
+
+	cfg := config.DefaultConfig()
 	log.Debug("Configuration loaded")
-	log.Info("Logger initialized", "level", cfg.LogLevel)
+	log.Info("Logger initialized", "level", cfg.Log.Level)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
@@ -36,7 +35,7 @@ func main() {
 	isStarted.Store(false)
 
 	// Run Process Manager
-	pm := manager.NewManager()
+	pm := manager.NewManager(cfg.Workers)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -55,7 +54,7 @@ func main() {
 	}()
 
 	// Run Health Checker
-	hc := healthcheck.NewChecker(pm.Processes, lb)
+	hc := healthcheck.NewChecker(cfg.HealthCheck, pm.Processes, lb)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -64,7 +63,7 @@ func main() {
 
 	// Run probes
 	if cfg.Probes.Enabled {
-		probes := probes.NewProbes(isStarted, pm, hc)
+		probes := probes.NewProbes(cfg.Probes, isStarted, pm, hc)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -77,7 +76,7 @@ func main() {
 
 	// Run metrics
 	if cfg.Metrics.Enabled {
-		metrics := metrics.NewScraper(pm)
+		metrics := metrics.NewScraper(cfg.Metrics, pm)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -90,7 +89,7 @@ func main() {
 
 	// Run gRPC server
 	grpcProxy := proxy.NewProxy(lb)
-	grpcServer := server.NewServer(grpcProxy)
+	grpcServer := server.NewServer(cfg.Server, grpcProxy)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

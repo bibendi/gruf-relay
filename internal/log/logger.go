@@ -1,4 +1,4 @@
-package logger
+package log
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/lmittmann/tint"
 )
 
-var AppLogger Logger
+var defaultLogger Logger
 
 type LogFormat string
 
@@ -34,14 +34,14 @@ var levelMap = map[string]slog.Level{
 	"error": slog.LevelError,
 }
 
-func MustInitLogger() Logger {
-	level := config.AppConfig.LogLevel
+func MustInitLogger(logCfg config.Log) Logger {
+	level := logCfg.Level
 	logLevel, ok := levelMap[level]
 	if !ok {
 		panic(fmt.Sprintf("Invalid log level: %s", level))
 	}
 
-	format := config.AppConfig.LogFormat
+	format := logCfg.Format
 	logFormat, ok := formatMap[format]
 	if !ok {
 		panic(fmt.Sprintf("Invalid log format: %s", format))
@@ -50,9 +50,16 @@ func MustInitLogger() Logger {
 	if err != nil {
 		panic(err)
 	}
-	AppLogger = logger
-	slog.SetDefault(logger.(*slog.Logger))
+	defaultLogger = logger
+	slog.SetDefault(logger)
 	return logger
+}
+
+func DefaultLogger() Logger {
+	if defaultLogger == nil {
+		MustInitLogger(config.DefaultConfig().Log)
+	}
+	return defaultLogger
 }
 
 type Logger interface {
@@ -67,7 +74,7 @@ type Logger interface {
 	Handler() slog.Handler
 }
 
-func newLogger(w io.Writer, level slog.Level, format LogFormat) (Logger, error) {
+func newLogger(w io.Writer, level slog.Level, format LogFormat) (*slog.Logger, error) {
 	handlerOpts := &slog.HandlerOptions{
 		Level: level,
 	}
@@ -93,57 +100,57 @@ func newLogger(w io.Writer, level slog.Level, format LogFormat) (Logger, error) 
 }
 
 func With(args ...any) Logger {
-	return AppLogger.With(args...)
+	return DefaultLogger().With(args...)
 }
 
 func WithGroup(name string) Logger {
-	return AppLogger.WithGroup(name)
+	return DefaultLogger().WithGroup(name)
 }
 
 func Debug(msg string, args ...any) {
-	AppLogger.Log(context.Background(), slog.LevelDebug, msg, args...)
+	DefaultLogger().Log(context.Background(), slog.LevelDebug, msg, args...)
 }
 
 func DebugContext(ctx context.Context, msg string, args ...any) {
-	AppLogger.Log(ctx, slog.LevelDebug, msg, args...)
+	DefaultLogger().Log(ctx, slog.LevelDebug, msg, args...)
 }
 
 // Info calls [Logger.Info] on the default logger.
 func Info(msg string, args ...any) {
-	AppLogger.Log(context.Background(), slog.LevelInfo, msg, args...)
+	DefaultLogger().Log(context.Background(), slog.LevelInfo, msg, args...)
 }
 
 // InfoContext calls [Logger.InfoContext] on the default logger.
 func InfoContext(ctx context.Context, msg string, args ...any) {
-	AppLogger.Log(ctx, slog.LevelInfo, msg, args...)
+	DefaultLogger().Log(ctx, slog.LevelInfo, msg, args...)
 }
 
 // Warn calls [Logger.Warn] on the default logger.
 func Warn(msg string, args ...any) {
-	AppLogger.Log(context.Background(), slog.LevelWarn, msg, args...)
+	DefaultLogger().Log(context.Background(), slog.LevelWarn, msg, args...)
 }
 
 // WarnContext calls [Logger.WarnContext] on the default logger.
 func WarnContext(ctx context.Context, msg string, args ...any) {
-	AppLogger.Log(ctx, slog.LevelWarn, msg, args...)
+	DefaultLogger().Log(ctx, slog.LevelWarn, msg, args...)
 }
 
 // Error calls [Logger.Error] on the default logger.
 func Error(msg string, args ...any) {
-	AppLogger.Log(context.Background(), slog.LevelError, msg, args...)
+	DefaultLogger().Log(context.Background(), slog.LevelError, msg, args...)
 }
 
 // ErrorContext calls [Logger.ErrorContext] on the default logger.
 func ErrorContext(ctx context.Context, msg string, args ...any) {
-	AppLogger.Log(ctx, slog.LevelError, msg, args...)
+	DefaultLogger().Log(ctx, slog.LevelError, msg, args...)
 }
 
 // Log calls [Logger.Log] on the default logger.
 func Log(ctx context.Context, level slog.Level, msg string, args ...any) {
-	AppLogger.Log(ctx, level, msg, args...)
+	DefaultLogger().Log(ctx, level, msg, args...)
 }
 
 // LogAttrs calls [Logger.LogAttrs] on the default logger.
 func LogAttrs(ctx context.Context, level slog.Level, msg string, attrs ...slog.Attr) {
-	AppLogger.LogAttrs(ctx, level, msg, attrs...)
+	DefaultLogger().LogAttrs(ctx, level, msg, attrs...)
 }
