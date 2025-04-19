@@ -49,7 +49,7 @@ func (m *Manager) Run(ctx context.Context) error {
 			if err := p.Run(errCtx); err != nil {
 				select {
 				case errChan <- err:
-					log.Error("Failed to run server", slog.Any("error", err), slog.Any("server", p))
+					log.Error("Failed to run server", slog.Any("error", err), slog.Any("worker", p))
 				default:
 				}
 			}

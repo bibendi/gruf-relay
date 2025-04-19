@@ -73,7 +73,7 @@ func (p *processImpl) Run(ctx context.Context) error {
 
 	<-ctx.Done()
 	if err := p.shoutdown(); err != nil {
-		p.log.Error("Failed to shutdown server", slog.Any("error", err))
+		p.log.Error("Failed to shutdown worker", slog.Any("error", err))
 		return err
 	}
 	return nil
@@ -84,24 +84,24 @@ func (p *processImpl) start() error {
 	defer p.mu.Unlock()
 
 	if p.running {
-		p.log.Error("Server is already running")
+		p.log.Error("Worker is already running")
 		return nil
 	}
 
-	p.log.Info("Starting server")
+	p.log.Info("Starting worker")
 
 	p.client = nil
 
 	p.cmd = p.buildCmd()
 	if err := p.cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start server %s: %w", p, err)
+		return fmt.Errorf("failed to start worker %s: %w", p, err)
 	}
 
 	p.running = true
 
 	go p.waitCmdDone()
 
-	p.log.Info("Server started")
+	p.log.Info("Worker started")
 	return nil
 }
 
@@ -121,7 +121,7 @@ func (p *processImpl) GetClient() (*grpc.ClientConn, error) {
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
 				grpc.WithCodec(codec.Codec()))
 			if err != nil {
-				return nil, fmt.Errorf("failed creating new client for server %s: %v", p, err)
+				return nil, fmt.Errorf("failed creating new client for worker %s: %v", p, err)
 			}
 			p.client = client
 		}
@@ -133,7 +133,7 @@ func (p *processImpl) shoutdown() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.log.Info("Stopping server")
+	p.log.Info("Stopping worker")
 	p.stopping = true
 
 	if p.client != nil {
@@ -145,32 +145,32 @@ func (p *processImpl) shoutdown() error {
 	p.client = nil
 
 	if !p.running {
-		return errors.New("server is not running")
+		return errors.New("worker is not running")
 	}
 	p.running = false
 
 	// Check if the process is still alive
 	if p.cmd.ProcessState != nil && p.cmd.ProcessState.Exited() {
-		p.log.Error("Server is already exited")
+		p.log.Error("Worker is already exited")
 		return nil
 	}
 
 	// Send SIGTERM
-	p.log.Debug("Sending SIGTERM to server")
+	p.log.Debug("Sending SIGTERM to worker")
 	if err := p.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		p.log.Error("Failed to send SIGTERM to server", slog.Any("error", err))
+		p.log.Error("Failed to send SIGTERM to worker", slog.Any("error", err))
 		if err := p.cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("failed to kill server %s: %w", p, err)
+			return fmt.Errorf("failed to kill worker %s: %w", p, err)
 		}
 	}
 
 	select {
 	case <-p.cmdDoneChan:
-		p.log.Info("Server stopped")
+		p.log.Info("Worker stopped")
 	case <-time.After(5 * time.Second):
-		p.log.Error("Timeout waiting for server to exit, sending SIGKILL")
+		p.log.Error("Timeout waiting for worker to exit, sending SIGKILL")
 		if err := p.cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("failed to kill server %s: %w", p, err)
+			return fmt.Errorf("failed to kill worker %s: %w", p, err)
 		}
 	}
 
@@ -180,9 +180,9 @@ func (p *processImpl) shoutdown() error {
 func (p *processImpl) waitCmdDone() {
 	err := p.cmd.Wait()
 	if err != nil {
-		p.log.Error("Server exited unexpectedly", slog.Any("error", err))
+		p.log.Error("Worker exited unexpectedly", slog.Any("error", err))
 	} else {
-		p.log.Info("Server exited normally")
+		p.log.Info("Worker exited normally")
 	}
 
 	if p.stopping {
@@ -193,7 +193,7 @@ func (p *processImpl) waitCmdDone() {
 		return
 	}
 
-	p.log.Debug("Setting server as not running")
+	p.log.Debug("Setting worker as not running")
 	p.mu.Lock()
 	p.running = false
 	p.mu.Unlock()
@@ -201,7 +201,7 @@ func (p *processImpl) waitCmdDone() {
 	time.Sleep(2 * time.Second)
 
 	if err := p.start(); err != nil {
-		p.log.Error("Failed to restart server", slog.Any("error", err))
+		p.log.Error("Failed to restart worker", slog.Any("error", err))
 	}
 }
 

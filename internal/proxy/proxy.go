@@ -54,7 +54,7 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 	log.Debug("Request metadata", slog.Any("metadata", md))
 
 	process := p.Balancer.Next()
-	log.Debug("Selected server", slog.Any("server", process))
+	log.Debug("Selected worker", slog.Any("worker", process))
 	if process == nil {
 		return status.Error(codes.Unavailable, "server unavailable")
 	}
@@ -71,7 +71,7 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 		return status.Errorf(codes.Unavailable, "failed creating downstream: %v", err)
 	}
 
-	log.Info("Proxying request", slog.String("method", fullMethod), slog.Any("server", process))
+	log.Info("Proxying request", slog.String("method", fullMethod), slog.Any("worker", process))
 
 	upstreamErrChan := proxyRequest(upstream, downstream)
 	downstreamErrChan := proxyResponse(downstream, upstream)
@@ -98,10 +98,10 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 			upstream.SetTrailer(downstream.Trailer())
 
 			if err == io.EOF {
-				log.Info("Finish proxying", slog.String("method", fullMethod), slog.Any("server", process))
+				log.Info("Finish proxying", slog.String("method", fullMethod), slog.Any("worker", process))
 				return nil
 			} else {
-				log.Error("Failed proxy response", slog.Any("server", process), slog.Any("error", err))
+				log.Error("Failed proxy response", slog.Any("worker", process), slog.Any("error", err))
 				return err
 			}
 		}

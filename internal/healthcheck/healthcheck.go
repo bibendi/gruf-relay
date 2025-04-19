@@ -75,7 +75,7 @@ func (c *Checker) checkServer(p process.Process) {
 	if !p.IsRunning() {
 		c.lb.RemoveProcess(p)
 		c.updateServerState(p.String(), connectivity.Shutdown)
-		log.Error("Server is not running", slog.Any("server", p), slog.Any("state", connectivity.Shutdown))
+		log.Error("Server is not running", slog.Any("worker", p), slog.Any("state", connectivity.Shutdown))
 		return
 	}
 
@@ -83,7 +83,7 @@ func (c *Checker) checkServer(p process.Process) {
 	if err != nil {
 		c.lb.RemoveProcess(p)
 		c.updateServerState(p.String(), connectivity.TransientFailure)
-		log.Error("Failed to dial server", slog.Any("server", p), slog.Any("error", err), slog.Any("state", connectivity.TransientFailure))
+		log.Error("Failed to dial server", slog.Any("worker", p), slog.Any("error", err), slog.Any("state", connectivity.TransientFailure))
 		return
 	}
 	defer conn.Close()
@@ -97,7 +97,7 @@ func (c *Checker) checkServer(p process.Process) {
 	if err != nil {
 		c.lb.RemoveProcess(p)
 		c.updateServerState(p.String(), connectivity.TransientFailure)
-		log.Error("Health check failed for server", slog.Any("server", p), slog.Any("error", err), slog.Any("state", connectivity.TransientFailure))
+		log.Error("Health check failed for server", slog.Any("worker", p), slog.Any("error", err), slog.Any("state", connectivity.TransientFailure))
 		return
 	}
 
@@ -115,7 +115,7 @@ func (c *Checker) checkServer(p process.Process) {
 	}
 
 	c.updateServerState(p.String(), state)
-	log.Info("Server is healthy", slog.Any("server", p), slog.Any("status", resp.Status), slog.Any("state", state))
+	log.Info("Server is healthy", slog.Any("worker", p), slog.Any("status", resp.Status), slog.Any("state", state))
 }
 
 func (c *Checker) updateServerState(name string, state connectivity.State) {
