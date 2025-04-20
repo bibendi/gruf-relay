@@ -1,4 +1,3 @@
-// internal/manager/manager_test.go
 package manager
 
 import (
@@ -49,7 +48,7 @@ var _ = Describe("Manager", func() {
 
 	Describe("Run", func() {
 		It("runs all processes correctly", func() {
-			ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
+			ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
 			process1 := process.NewMockProcess(ctrl)
 			process2 := process.NewMockProcess(ctrl)
 			process1.EXPECT().Run(gomock.Any()).Return(nil)

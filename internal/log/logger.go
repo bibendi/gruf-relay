@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"sync"
 
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/lmittmann/tint"
@@ -55,8 +56,15 @@ func MustInitLogger(logCfg config.Log) Logger {
 	return logger
 }
 
+var mu sync.Mutex
+
 func DefaultLogger() Logger {
 	if defaultLogger == nil {
+		mu.Lock()
+		defer mu.Unlock()
+		if defaultLogger != nil {
+			return defaultLogger
+		}
 		MustInitLogger(config.DefaultConfig().Log)
 	}
 	return defaultLogger

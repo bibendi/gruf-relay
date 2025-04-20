@@ -61,6 +61,7 @@ type Workers struct {
 
 type HealthCheck struct {
 	Interval time.Duration `yaml:"interval" env:"HEALTH_CHECK_INTERVAL" env-default:"5s"`
+	Timeout  time.Duration `yaml:"timeout" env:"HEALTH_CHECK_TIMEOUT" env-default:"3s"`
 }
 
 type Probes struct {
