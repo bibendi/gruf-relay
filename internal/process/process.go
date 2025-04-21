@@ -1,4 +1,4 @@
-//go:generate mockgen -source=process.go -destination=mock_process.go -package=process
+//go:generate mockgen -source=process.go -destination=process_mock.go -package=process
 
 package process
 

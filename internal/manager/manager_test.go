@@ -42,7 +42,7 @@ var _ = Describe("Manager", func() {
 		It("should create a new manager with the correct number of processes", func() {
 			manager := NewManager(workersCfg)
 			Expect(manager).NotTo(BeNil())
-			Expect(len(manager.Processes)).To(Equal(2))
+			Expect(len(manager.GetWorkers())).To(Equal(2))
 		})
 	})
 
@@ -55,7 +55,7 @@ var _ = Describe("Manager", func() {
 			process2.EXPECT().Run(gomock.Any()).Return(nil)
 
 			manager := NewManager(workersCfg)
-			manager.Processes = map[string]process.Process{
+			manager.processes = map[string]process.Process{
 				"worker-1": process1,
 				"worker-2": process2,
 			}
@@ -75,7 +75,7 @@ var _ = Describe("Manager", func() {
 			process2.EXPECT().String().Return("worker-2").AnyTimes()
 
 			manager := NewManager(workersCfg)
-			manager.Processes = map[string]process.Process{
+			manager.processes = map[string]process.Process{
 				"worker-1": process1,
 				"worker-2": process2,
 			}

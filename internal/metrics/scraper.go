@@ -115,7 +115,7 @@ func (s *Scraper) scrapeAndAggregate() {
 
 	metricsMap := make(map[string]*dto.MetricFamily)
 
-	for _, p := range s.pm.Processes {
+	for _, p := range s.pm.GetWorkers() {
 		if !p.IsRunning() {
 			continue
 		}

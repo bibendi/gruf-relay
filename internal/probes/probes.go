@@ -1,3 +1,4 @@
+//go:generate mockgen -source=probes.go -destination=probes_mock.go -package=probes
 package probes
 
 import (
@@ -9,20 +10,26 @@ import (
 	"sync/atomic"
 
 	"github.com/bibendi/gruf-relay/internal/config"
-	"github.com/bibendi/gruf-relay/internal/healthcheck"
 	"github.com/bibendi/gruf-relay/internal/log"
-	"github.com/bibendi/gruf-relay/internal/manager"
 	"google.golang.org/grpc/connectivity"
 )
+
+type HealthChecker interface {
+	GetServerState(name string) connectivity.State
+}
+
+type Manager interface {
+	GetWorkerNames() []string
+}
 
 type Probes struct {
 	port         int
 	appIsStarted *atomic.Value
-	pm           *manager.Manager
-	hc           *healthcheck.Checker
+	pm           Manager
+	hc           HealthChecker
 }
 
-func NewProbes(cfg config.Probes, isStarted *atomic.Value, pm *manager.Manager, hc *healthcheck.Checker) *Probes {
+func NewProbes(cfg config.Probes, isStarted *atomic.Value, pm Manager, hc HealthChecker) *Probes {
 	probes := &Probes{
 		port:         cfg.Port,
 		pm:           pm,
@@ -87,12 +94,12 @@ func (p *Probes) handleStartupProbe(isStarted *atomic.Value) http.HandlerFunc {
 	}
 }
 
-func (p *Probes) handleReadinessProbe(pm *manager.Manager, hc *healthcheck.Checker) http.HandlerFunc {
+func (p *Probes) handleReadinessProbe(pm Manager, hc HealthChecker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Info("Received readiness request")
-		for name, process := range pm.Processes {
+		for _, name := range pm.GetWorkerNames() {
 			if state := hc.GetServerState(name); state == connectivity.TransientFailure || state == connectivity.Shutdown {
-				log.Error("Readiness probe failed", slog.Any("process", process), slog.Any("state", state))
+				log.Error("Readiness probe failed", slog.Any("worker", name), slog.String("state", state.String()))
 				w.WriteHeader(http.StatusServiceUnavailable)
 				return
 			}
@@ -101,12 +108,12 @@ func (p *Probes) handleReadinessProbe(pm *manager.Manager, hc *healthcheck.Check
 	}
 }
 
-func (p *Probes) handleLivenessrobe(pm *manager.Manager, hc *healthcheck.Checker) http.HandlerFunc {
+func (p *Probes) handleLivenessrobe(pm Manager, hc HealthChecker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Info("Received liveness request")
-		for name, process := range pm.Processes {
+		for _, name := range pm.GetWorkerNames() {
 			if state := hc.GetServerState(name); state == connectivity.Shutdown {
-				log.Error("Liveness probe failed", slog.Any("process", process), slog.Any("state", state))
+				log.Error("Liveness probe failed", slog.Any("worker", name), slog.String("state", state.String()))
 				w.WriteHeader(http.StatusServiceUnavailable)
 				return
 			}

@@ -54,7 +54,7 @@ func main() {
 	}()
 
 	// Run Health Checker
-	hc := healthcheck.NewChecker(cfg.HealthCheck, pm.Processes, lb, nil)
+	hc := healthcheck.NewChecker(cfg.HealthCheck, pm.GetWorkers(), lb, nil)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

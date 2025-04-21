@@ -1,4 +1,4 @@
-//go:generate mockgen -source=healthcheck.go -destination=mock_balancer.go -package=healthcheck
+//go:generate mockgen -source=healthcheck.go -destination=healthcheck_mock.go -package=healthcheck
 package healthcheck
 
 import (
