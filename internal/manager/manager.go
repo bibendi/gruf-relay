@@ -9,7 +9,6 @@ import (
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/log"
 	"github.com/bibendi/gruf-relay/internal/process"
-	"github.com/onsi/ginkgo/v2"
 )
 
 type Manager struct {
@@ -45,7 +44,6 @@ func (m *Manager) Run(ctx context.Context) error {
 		wg.Add(1)
 		go func(p process.Process) {
 			defer wg.Done()
-			defer ginkgo.GinkgoRecover()
 			if err := p.Run(errCtx); err != nil {
 				select {
 				case errChan <- err:

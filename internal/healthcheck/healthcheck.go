@@ -10,7 +10,6 @@ import (
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/log"
 	"github.com/bibendi/gruf-relay/internal/process"
-	"github.com/onsi/ginkgo/v2"
 	"google.golang.org/grpc/connectivity"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
@@ -80,7 +79,6 @@ func (c *Checker) checkAll() {
 		wg.Add(1)
 		go func(p process.Process) {
 			defer wg.Done()
-			defer ginkgo.GinkgoRecover()
 			state := c.checkWorker(p)
 			c.updateWorkerState(p.String(), state)
 		}(p)

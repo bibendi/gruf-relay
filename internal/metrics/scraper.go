@@ -1,3 +1,4 @@
+//go:generate mockgen -source=scraper.go -destination=scraper_mock.go -package=metrics
 package metrics
 
 import (
@@ -12,7 +13,6 @@ import (
 
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/log"
-	"github.com/bibendi/gruf-relay/internal/manager"
 	"github.com/bibendi/gruf-relay/internal/process"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -20,8 +20,12 @@ import (
 	"github.com/prometheus/common/expfmt"
 )
 
+type Manager interface {
+	GetWorkers() map[string]process.Process
+}
+
 type Scraper struct {
-	pm        *manager.Manager
+	pm        Manager
 	interval  time.Duration
 	port      int
 	path      string
@@ -29,9 +33,9 @@ type Scraper struct {
 	client    *http.Client
 }
 
-func NewScraper(cfg config.Metrics, pm *manager.Manager) *Scraper {
+func NewScraper(cfg config.Metrics, pm Manager) *Scraper {
 	client := &http.Client{
-		Timeout: 10 * time.Second, // Add timeout for http requests
+		Timeout: 10 * time.Second,
 	}
 
 	return &Scraper{
@@ -59,7 +63,7 @@ func (s *Scraper) Serve(ctx context.Context) error {
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
 			if err != http.ErrServerClosed {
-				log.Error("Metrics server failed", slog.Any("error", err))
+				log.Error("Failed to serve the metrics server", slog.Any("error", err))
 				errChan <- err
 			}
 		}
@@ -67,7 +71,7 @@ func (s *Scraper) Serve(ctx context.Context) error {
 
 	for {
 		select {
-		case <-errChan:
+		case err := <-errChan:
 			log.Error("Error scraping metrics", slog.Any("error", err))
 			return err
 		case <-ctx.Done():
@@ -115,8 +119,8 @@ func (s *Scraper) scrapeAndAggregate() {
 
 	metricsMap := make(map[string]*dto.MetricFamily)
 
-	for _, p := range s.pm.GetWorkers() {
-		if !p.IsRunning() {
+	for name, worker := range s.pm.GetWorkers() {
+		if !worker.IsRunning() {
 			continue
 		}
 
@@ -126,7 +130,7 @@ func (s *Scraper) scrapeAndAggregate() {
 
 			mfList, err := s.scrapeMetrics("http://" + p.MetricsAddr())
 			if err != nil {
-				log.Error("Error scraping metrics", slog.Any("process", p), slog.Any("error", err))
+				log.Error("Error scraping metrics", slog.String("worker", name), slog.Any("error", err))
 				return
 			}
 
@@ -139,7 +143,7 @@ func (s *Scraper) scrapeAndAggregate() {
 				}
 			}
 			mapMu.Unlock()
-		}(p)
+		}(worker)
 	}
 
 	wg.Wait()
@@ -158,7 +162,6 @@ func (s *Scraper) scrapeMetrics(url string) ([]*dto.MetricFamily, error) {
 		return nil, fmt.Errorf("failed to fetch metrics from %s, status code: %d", url, resp.StatusCode)
 	}
 
-	// Create a new decoder
 	decoder := expfmt.NewDecoder(resp.Body, expfmt.FmtText)
 
 	var mfList []*dto.MetricFamily
