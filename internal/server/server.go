@@ -1,3 +1,4 @@
+//go:generate mockgen -source=server.go -destination=server_mock.go -package=server
 package server
 
 import (
@@ -9,19 +10,22 @@ import (
 	"github.com/bibendi/gruf-relay/internal/codec"
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/log"
-	"github.com/bibendi/gruf-relay/internal/proxy"
 	"google.golang.org/grpc"
 )
+
+type Proxy interface {
+	HandleRequest(any, grpc.ServerStream) error
+}
 
 type Server struct {
 	host  string
 	port  int
-	proxy *proxy.Proxy
+	proxy Proxy
 }
 
 type ServiceHandler func(srv interface{}, stream grpc.ServerStream) error
 
-func NewServer(cfg config.Server, proxy *proxy.Proxy) *Server {
+func NewServer(cfg config.Server, proxy Proxy) *Server {
 	return &Server{
 		host:  cfg.Host,
 		port:  cfg.Port,
