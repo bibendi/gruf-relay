@@ -1,3 +1,5 @@
+//go:generate mockgen -source=proxy.go -destination=proxy_mock.go -package proxy
+//go:generate mockgen -destination=stream_mock.go -package proxy google.golang.org/grpc ServerStream
 package proxy
 
 import (

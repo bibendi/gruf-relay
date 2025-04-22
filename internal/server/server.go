@@ -23,8 +23,6 @@ type Server struct {
 	proxy Proxy
 }
 
-type ServiceHandler func(srv interface{}, stream grpc.ServerStream) error
-
 func NewServer(cfg config.Server, proxy Proxy) *Server {
 	return &Server{
 		host:  cfg.Host,
