@@ -1,5 +1,4 @@
 //go:generate mockgen -source=process.go -destination=process_mock.go -package=process
-
 package process
 
 import (
@@ -8,9 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/codec"
@@ -35,16 +32,25 @@ type processImpl struct {
 	metricsPath string
 	log         log.Logger
 	client      *grpc.ClientConn
-	cmd         *exec.Cmd
+	cmd         Command
 	mu          sync.Mutex
 	running     bool
 	stopping    bool
 	cmdDoneChan chan error
+	cmdExecutor CommandExecutor
 }
 
-func NewProcess(name string, port, metricsPort int, metricsPath string) Process {
+type Option func(*processImpl)
+
+func WithExecutor(executor CommandExecutor) Option {
+	return func(p *processImpl) {
+		p.cmdExecutor = executor
+	}
+}
+
+func NewProcess(name string, port, metricsPort int, metricsPath string, opts ...Option) *processImpl {
 	logger := log.With(slog.String("worker", name))
-	return &processImpl{
+	p := &processImpl{
 		Name:        name,
 		port:        port,
 		metricsPort: metricsPort,
@@ -52,6 +58,12 @@ func NewProcess(name string, port, metricsPort int, metricsPath string) Process 
 		cmdDoneChan: make(chan error, 1),
 		log:         logger,
 	}
+
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
 }
 
 func (p *processImpl) String() string {
@@ -72,7 +84,7 @@ func (p *processImpl) Run(ctx context.Context) error {
 	}
 
 	<-ctx.Done()
-	if err := p.shoutdown(); err != nil {
+	if err := p.shutdown(); err != nil {
 		p.log.Error("Failed to shutdown worker", slog.Any("error", err))
 		return err
 	}
@@ -92,7 +104,7 @@ func (p *processImpl) start() error {
 
 	p.client = nil
 
-	p.cmd = p.buildCmd()
+	p.buildCmd()
 	if err := p.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start worker %s: %w", p, err)
 	}
@@ -129,7 +141,7 @@ func (p *processImpl) GetClient() (*grpc.ClientConn, error) {
 	return p.client, nil
 }
 
-func (p *processImpl) shoutdown() error {
+func (p *processImpl) shutdown() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -150,16 +162,16 @@ func (p *processImpl) shoutdown() error {
 	p.running = false
 
 	// Check if the process is still alive
-	if p.cmd.ProcessState != nil && p.cmd.ProcessState.Exited() {
+	if state := p.cmd.ProcessState(); state != nil && state.Exited() {
 		p.log.Error("Worker is already exited")
 		return nil
 	}
 
 	// Send SIGTERM
 	p.log.Debug("Sending SIGTERM to worker")
-	if err := p.cmd.Process.Signal(syscall.SIGTERM); err != nil {
+	if err := p.cmd.Stop(); err != nil {
 		p.log.Error("Failed to send SIGTERM to worker", slog.Any("error", err))
-		if err := p.cmd.Process.Kill(); err != nil {
+		if err := p.cmd.Kill(); err != nil {
 			return fmt.Errorf("failed to kill worker %s: %w", p, err)
 		}
 	}
@@ -169,7 +181,7 @@ func (p *processImpl) shoutdown() error {
 		p.log.Info("Worker stopped")
 	case <-time.After(5 * time.Second):
 		p.log.Error("Timeout waiting for worker to exit, sending SIGKILL")
-		if err := p.cmd.Process.Kill(); err != nil {
+		if err := p.cmd.Kill(); err != nil {
 			return fmt.Errorf("failed to kill worker %s: %w", p, err)
 		}
 	}
@@ -205,21 +217,15 @@ func (p *processImpl) waitCmdDone() {
 	}
 }
 
-func (p *processImpl) buildCmd() *exec.Cmd {
+func (p *processImpl) buildCmd() {
 	args := p.cmdArgs()
-	cmd := exec.Command(args[0], args[1:]...)
-	// Allow to exec programs in the current directory
-	if errors.Is(cmd.Err, exec.ErrDot) {
-		cmd.Err = nil
-	}
+	p.cmd = p.cmdExecutor.NewCommand(args[0], args[1:]...)
 
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, fmt.Sprintf("PROMETHEUS_EXPORTER_PORT=%d", p.metricsPort))
-	cmd.Env = append(cmd.Env, fmt.Sprintf("PROMETHEUS_EXPORTER_PATH=%s", p.metricsPath))
-	p.log.Debug("Command built", "command", cmd)
-	return cmd
+	cmdEnv := os.Environ()
+	cmdEnv = append(cmdEnv, fmt.Sprintf("PROMETHEUS_EXPORTER_PORT=%d", p.metricsPort))
+	cmdEnv = append(cmdEnv, fmt.Sprintf("PROMETHEUS_EXPORTER_PATH=%s", p.metricsPath))
+	p.cmd.SetEnv(cmdEnv)
+	p.log.Debug("Command built", "command", args)
 }
 
 func (p *processImpl) cmdArgs() []string {
