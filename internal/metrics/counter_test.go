@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"strings"
-	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -10,11 +9,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	dto "github.com/prometheus/client_model/go"
 )
-
-func TestCounterCollector(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Counter Collector Suite")
-}
 
 var _ = Describe("CounterCollector", func() {
 	var (

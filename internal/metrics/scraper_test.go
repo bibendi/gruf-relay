@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"testing"
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/config"
@@ -14,11 +13,6 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"go.uber.org/mock/gomock"
 )
-
-func TestScraper(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Scraper Suite")
-}
 
 var _ = Describe("Scraper", func() {
 	var (
