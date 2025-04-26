@@ -3,7 +3,6 @@ package process
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -63,6 +62,10 @@ func NewProcess(name string, port, metricsPort int, metricsPath string, opts ...
 		opt(p)
 	}
 
+	if p.cmdExecutor == nil {
+		p.cmdExecutor = &DefaultCommandExecutor{}
+	}
+
 	return p
 }
 
@@ -97,6 +100,11 @@ func (p *processImpl) start() error {
 
 	if p.running {
 		p.log.Error("Worker is already running")
+		return nil
+	}
+
+	if p.stopping {
+		p.log.Warn("Worker is stopping, will not start again")
 		return nil
 	}
 
@@ -157,13 +165,14 @@ func (p *processImpl) shutdown() error {
 	p.client = nil
 
 	if !p.running {
-		return errors.New("worker is not running")
+		p.log.Warn("Worker is not running, no need to shutdown")
+		return nil
 	}
 	p.running = false
 
 	// Check if the process is still alive
 	if state := p.cmd.ProcessState(); state != nil && state.Exited() {
-		p.log.Error("Worker is already exited")
+		p.log.Warn("Worker is already exited")
 		return nil
 	}
 
@@ -210,7 +219,7 @@ func (p *processImpl) waitCmdDone() {
 	p.running = false
 	p.mu.Unlock()
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	if err := p.start(); err != nil {
 		p.log.Error("Failed to restart worker", slog.Any("error", err))

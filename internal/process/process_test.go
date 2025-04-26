@@ -2,6 +2,7 @@ package process
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -54,8 +55,8 @@ var _ = Describe("Process", func() {
 			mockExecutor = NewMockCommandExecutor(ctrl)
 			withExecutor := WithExecutor(mockExecutor)
 			mockCommand = NewMockCommand(ctrl)
-			mockExecutor.EXPECT().NewCommand(gomock.Any(), gomock.Any()).Return(mockCommand)
-			mockCommand.EXPECT().SetEnv(gomock.Any())
+			mockExecutor.EXPECT().NewCommand(gomock.Any(), gomock.Any()).Return(mockCommand).AnyTimes()
+			mockCommand.EXPECT().SetEnv(gomock.Any()).AnyTimes()
 
 			process = NewProcess("worker-1", 50051, 9090, "/metrics", withExecutor)
 
@@ -75,10 +76,35 @@ var _ = Describe("Process", func() {
 				wCancel()
 				return nil
 			})
-			mockCommand.EXPECT().ProcessState().Return(nil)
+			mockCommand.EXPECT().ProcessState().Return(nil).AnyTimes()
 
 			go func() {
 				time.Sleep(100 * time.Millisecond)
+				cancel()
+			}()
+
+			err := process.Run(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(process.IsRunning()).Should(BeFalse())
+		})
+
+		It("should restart if the worker exits with an error", func() {
+			firstRun := true
+			mockCommand.EXPECT().Start().Return(nil).Times(2)
+			mockCommand.EXPECT().Wait().DoAndReturn(func() error {
+				if firstRun {
+					firstRun = false
+					return errors.New("test error")
+				}
+				go func() {
+					<-ctx.Done()
+				}()
+				return nil
+			}).Times(2)
+			mockCommand.EXPECT().ProcessState().Return(nil).AnyTimes()
+
+			go func() {
+				time.Sleep(1500 * time.Millisecond)
 				cancel()
 			}()
 
