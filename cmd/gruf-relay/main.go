@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -20,7 +22,22 @@ import (
 	"github.com/bibendi/gruf-relay/internal/server"
 )
 
+var (
+	version   = "dev"
+	commit    = "unknown"
+	buildDate = ""
+
+	printVersion = flag.Bool("v", false, "Print version and exit")
+)
+
 func main() {
+	flag.Parse()
+
+	if *printVersion {
+		fmt.Printf("gruf-relay\nversion: %s\ncommit: %s\nbuilt date: %s\n", version, commit, buildDate) // Update print format
+		os.Exit(0)
+	}
+
 	log.Info("Starting gRPC Relay")
 
 	cfg := config.DefaultConfig()
