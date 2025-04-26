@@ -29,24 +29,27 @@ make build
 
 ### Config File (config.yaml)
 ```yaml
-log_level: "debug"
+log:
+  level: "debug"
+  format: "json"
+server:
 host: "0.0.0.0"
 port: 8080
-health_check_interval: "5s"
-
 workers:
-  count: 3
+  count: 2
   start_port: 9000
   metrics_path: "/metrics"
-
+health_check:
+  interval: "5s"
+  timeout: "3s"
 probes:
   enabled: true
   port: 5555
-
 metrics:
   enabled: true
-  metrics_port: 9394
+  port: 9394
   path: "/metrics"
+  interval: "5s"
 ```
 
 ### Environment Variables
