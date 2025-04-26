@@ -27,7 +27,13 @@ make build
 
 ## Configuration
 
-### Config File (config.yaml)
+Gruf Relay prioritizes configuration in the following order:
+
+1.  **Environment Variables**: Override configuration settings.
+2.  **Configuration File**: If the `CONFIG_PATH` environment variable is set, Gruf Relay attempts to load the configuration from the specified YAML file. If not set, it defaults to searching for a file named `gruf-relay.yml` in the current directory.
+3.  **Default Values**: If a configuration value is not provided by either environment variables or the config file, the default value is used.
+
+### Config File (gruf-relay.yml)
 ```yaml
 log:
   level: "debug"
@@ -54,29 +60,31 @@ metrics:
 
 ### Environment Variables
 
-The following environment variables can be used to override settings in the config.yaml file:
+The following environment variables can be used to override settings in the `config.yaml` file. Environment variables take precedence over the configuration file.
 
-The following environment variables can be used to override settings in the config.yaml file:
-
-LOG_LEVEL: Logging level (default: debug). Possible values: debug, info, warn, error.
-LOG_FORMAT: Logging format (default: json). Possible values: json, text.
-HOST: Host address for the gRPC proxy (default: 0.0.0.0).
-PORT: Port for the gRPC proxy (default: 8080).
-HEALTH_CHECK_INTERVAL: Interval for health checks (default: 5s).
-WORKERS_COUNT: Number of backend workers (default: 2).
-WORKERS_START_PORT: Starting port for workers (default: 9000).
-WORKERS_METRICS_PATH: Path for worker metrics endpoint (default: /metrics).
-PROBES_ENABLED: Enable/disable liveness/readiness probes (default: true).
-PROBES_PORT: Port for liveness/readiness probes (default: 5555).
-METRICS_ENABLED: Enable/disable metrics exposure (default: true).
-METRICS_PORT: Port for Prometheus metrics (default: 9394).
-METRICS_PATH: Path for Prometheus metrics (default: /metrics).
+*   `LOG_LEVEL`: Logging level (default: `debug`). Possible values: `debug`, `info`, `warn`, `error`.
+*   `LOG_FORMAT`: Logging format (default: `json`). Possible values: `json`, `text`.
+*   `SERVER_HOST`: Host address for the gRPC proxy (default: `0.0.0.0`).
+*   `SERVER_PORT`: Port for the gRPC proxy (default: `8080`).
+*   `HEALTH_CHECK_INTERVAL`: Interval for health checks (default: `5s`).  Must be a valid duration string (e.g., "10s", "1m", "1m30s").
+*   `HEALTH_CHECK_TIMEOUT`: Timeout for health checks (default: `3s`).  Must be a valid duration string (e.g., "10s", "1m", "1m30s").
+*   `WORKERS_COUNT`: Number of backend workers (default: `2`).
+*   `WORKERS_START_PORT`: Starting port for workers (default: `9000`).
+*   `WORKERS_METRICS_PATH`: Path for worker metrics endpoint (default: `/metrics`).
+*   `PROBES_ENABLED`: Enable/disable liveness/readiness probes (default: `true`).
+*   `PROBES_PORT`: Port for liveness/readiness probes (default: `5555`).
+*   `METRICS_ENABLED`: Enable/disable metrics exposure (default: `true`).
+*   `METRICS_PORT`: Port for Prometheus metrics (default: `9394`).
+*   `METRICS_PATH`: Path for Prometheus metrics (default: `/metrics`).
+*   `METRICS_INTERVAL`: Interval for metrics collection (default: `5s`). Must be a valid duration string (e.g., "10s", "1m", "1m30s").
 
 Example:
+
 ```bash
-export PORT=8080
+export SERVER_PORT=8081
 export WORKERS_COUNT=3
 export METRICS_ENABLED=true
+export HEALTH_CHECK_INTERVAL=10s
 ```
 
 ## Usage

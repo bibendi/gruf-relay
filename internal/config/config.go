@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	defaultConfigPath = "config/gruf-relay.yml"
+	defaultConfigPath = "gruf-relay.yml"
 	defaultConfig     *Config
 )
 
