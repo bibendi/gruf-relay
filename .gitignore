@@ -13,7 +13,6 @@
 
 # Dependency directories
 vendor/
-bin/
 dist/
 
 # Go workspace file
@@ -25,3 +24,6 @@ go.work
 *.swp
 *.swo
 build/
+
+/gem/exe/gruf-relay*
+/gem/gruf-relay*.gem

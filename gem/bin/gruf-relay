@@ -1,0 +1,8 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "rbconfig"  # Needed for platform detection
+require "gruf_relay"
+
+# Pass all arguments to the binary
+exec GrufRelay.binary_path, *ARGV

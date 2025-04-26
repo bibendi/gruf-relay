@@ -1,9 +1,13 @@
 APP_NAME=gruf-relay
 BUILD_DIR=build
+GEM_DIR=gem
 
-VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "dev")
+VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "0.1.0-dev")
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
+GEM_VERSION ?= $(VERSION)
+
+PLATFORMS = linux-amd64 linux-arm64 darwin-amd64 darwin-arm64
 
 .PHONY: build
 build:
@@ -18,13 +22,74 @@ build:
 		-o $(BUILD_DIR)/$(APP_NAME) \
 		./cmd/gruf-relay
 
-.PHONY: build-amd64
-build-amd64:
-	GOOS=linux GOARCH=amd64 $(MAKE) build APP_NAME=$(APP_NAME)-amd64
+.PHONY: build-gems
+build-gems: $(PLATFORMS:%=build-gem-%)
+
+.PHONY: build-gem-linux-amd64
+build-gem-linux-amd64:
+	mkdir -p $(GEM_DIR)/exe
+	GOOS=linux GOARCH=amd64 go build \
+		-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)" \
+		-o $(GEM_DIR)/exe/$(APP_NAME)-linux-amd64 \
+		./cmd/gruf-relay
+	cd $(GEM_DIR) && GEM_VERSION=$(GEM_VERSION) PLATFORM=x86_64-linux BINARY_NAME=$(APP_NAME)-linux-amd64 gem build -o $(APP_NAME)-$(GEM_VERSION)-linux-amd64.gem
+
+.PHONY: build-gem-linux-arm64
+build-gem-linux-arm64:
+	mkdir -p $(GEM_DIR)/exe
+	GOOS=linux GOARCH=arm64 go build \
+		-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)" \
+		-o $(GEM_DIR)/exe/$(APP_NAME)-linux-arm64 \
+		./cmd/gruf-relay
+	cd $(GEM_DIR) && GEM_VERSION=$(GEM_VERSION) PLATFORM=arm64-linux BINARY_NAME=$(APP_NAME)-linux-arm64 gem build -o $(APP_NAME)-$(GEM_VERSION)-linux-arm64.gem
+
+.PHONY: build-gem-darwin-amd64
+build-gem-darwin-amd64:
+	mkdir -p $(GEM_DIR)/exe
+	GOOS=darwin GOARCH=amd64 go build \
+		-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)" \
+		-o $(GEM_DIR)/exe/$(APP_NAME)-darwin-amd64 \
+		./cmd/gruf-relay
+	cd $(GEM_DIR) && GEM_VERSION=$(GEM_VERSION) PLATFORM=x86_64-darwin BINARY_NAME=$(APP_NAME)-darwin-amd64 gem build -o $(APP_NAME)-$(GEM_VERSION)-darwin-amd64.gem
+
+.PHONY: build-gem-darwin-arm64
+build-gem-darwin-arm64:
+	mkdir -p $(GEM_DIR)/exe
+	GOOS=darwin GOARCH=arm64 go build \
+		-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)" \
+		-o $(GEM_DIR)/exe/$(APP_NAME)-darwin-arm64 \
+		./cmd/gruf-relay
+	cd $(GEM_DIR) && GEM_VERSION=$(GEM_VERSION) PLATFORM=arm64-darwin BINARY_NAME=$(APP_NAME)-darwin-arm64 gem build -o $(APP_NAME)-$(GEM_VERSION)-darwin-arm64.gem
+
+.PHONY: publish-gems
+publish-gems: build-gems
+	@echo "Publishing gems to RubyGems.org"
+	cd $(GEM_DIR) && for gemfile in $(APP_NAME)-$(GEM_VERSION)-*.gem; do \
+		echo "Publishing $$gemfile..."; \
+		gem push $$gemfile; \
+	done
+
+.PHONY: publish-gem-linux-amd64
+publish-gem-linux-amd64: build-gem-linux-amd64
+	cd $(GEM_DIR) && gem push $(APP_NAME)-$(GEM_VERSION)-linux-amd64.gem
+
+.PHONY: publish-gem-linux-arm64
+publish-gem-linux-arm64: build-gem-linux-arm64
+	cd $(GEM_DIR) && gem push $(APP_NAME)-$(GEM_VERSION)-linux-arm64.gem
+
+.PHONY: publish-gem-darwin-amd64
+publish-gem-darwin-amd64: build-gem-darwin-amd64
+	cd $(GEM_DIR) && gem push $(APP_NAME)-$(GEM_VERSION)-darwin-amd64.gem
+
+.PHONY: publish-gem-darwin-arm64
+publish-gem-darwin-arm64: build-gem-darwin-arm64
+	cd $(GEM_DIR) && gem push $(APP_NAME)-$(GEM_VERSION)-darwin-arm64.gem
 
 .PHONY: clean
 clean:
 	rm -rf $(BUILD_DIR)
+	rm -rf $(GEM_DIR)/exe
+	rm -f $(GEM_DIR)/*.gem
 
 .PHONY: test
 test:
