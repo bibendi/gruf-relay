@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/config"
-	"github.com/bibendi/gruf-relay/internal/process"
+	"github.com/bibendi/gruf-relay/internal/worker"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	dto "github.com/prometheus/client_model/go"
@@ -17,14 +17,14 @@ import (
 var _ = Describe("Scraper", func() {
 	var (
 		ctrl    *gomock.Controller
-		pm      *MockManager
+		m       *MockManager
 		cfg     config.Metrics
 		scraper *Scraper
 	)
 
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
-		pm = NewMockManager(ctrl)
+		m = NewMockManager(ctrl)
 		cfg = config.Metrics{
 			Interval: time.Second,
 			Port:     8080,
@@ -39,9 +39,9 @@ var _ = Describe("Scraper", func() {
 
 	Describe("NewScraper", func() {
 		It("should create a new scraper with the given configuration", func() {
-			scraper = NewScraper(cfg, pm)
+			scraper = NewScraper(cfg, m)
 			Expect(scraper).NotTo(BeNil())
-			Expect(scraper.pm).To(Equal(pm))
+			Expect(scraper.m).To(Equal(m))
 			Expect(scraper.interval).To(Equal(cfg.Interval))
 			Expect(scraper.port).To(Equal(cfg.Port))
 			Expect(scraper.path).To(Equal(cfg.Path))
@@ -50,7 +50,7 @@ var _ = Describe("Scraper", func() {
 		})
 
 		It("should create a http client with timeout", func() {
-			scraper = NewScraper(cfg, pm)
+			scraper = NewScraper(cfg, m)
 			Expect(scraper.client.Timeout).To(Equal(10 * time.Second))
 		})
 	})
@@ -61,7 +61,7 @@ var _ = Describe("Scraper", func() {
 			cancel context.CancelFunc
 		)
 		BeforeEach(func() {
-			scraper = NewScraper(cfg, pm)
+			scraper = NewScraper(cfg, m)
 			ctx, cancel = context.WithCancel(context.Background())
 			DeferCleanup(func() {
 				cancel()
@@ -79,7 +79,7 @@ var _ = Describe("Scraper", func() {
 
 		It("should handle server listen error", func() {
 			cfg.Port = -1 // Provoke an error
-			scraper = NewScraper(cfg, pm)
+			scraper = NewScraper(cfg, m)
 			ctx, cancel = context.WithCancel(context.Background())
 			defer cancel()
 			err := scraper.Serve(ctx)
@@ -89,14 +89,14 @@ var _ = Describe("Scraper", func() {
 
 	Describe("scrapeAndAggregate", func() {
 		var (
-			worker1, worker2 *process.MockProcess
+			worker1, worker2 *worker.MockWorker
 			ts               *httptest.Server
 		)
 
 		BeforeEach(func() {
-			scraper = NewScraper(cfg, pm)
-			worker1 = process.NewMockProcess(ctrl)
-			worker2 = process.NewMockProcess(ctrl)
+			scraper = NewScraper(cfg, m)
+			worker1 = worker.NewMockWorker(ctrl)
+			worker2 = worker.NewMockWorker(ctrl)
 
 			ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "text/plain")
@@ -106,7 +106,7 @@ test_metric{label="value"} 10
 `))
 			}))
 
-			pm.EXPECT().GetWorkers().Return(map[string]process.Process{
+			m.EXPECT().GetWorkers().Return(map[string]worker.Worker{
 				"worker1": worker1,
 				"worker2": worker2,
 			}).AnyTimes()
@@ -129,13 +129,13 @@ test_metric{label="value"} 10
 
 	Describe("scrapeMetrics", func() {
 		It("Should return err when request failed", func() {
-			scraper = NewScraper(cfg, pm)
+			scraper = NewScraper(cfg, m)
 			_, err := scraper.scrapeMetrics("http://invalid-url")
 			Expect(err).To(HaveOccurred())
 		})
 
 		It("Should return err when status code is not ok", func() {
-			scraper = NewScraper(cfg, pm)
+			scraper = NewScraper(cfg, m)
 			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
 			}))
@@ -145,7 +145,7 @@ test_metric{label="value"} 10
 		})
 
 		It("Should return metrics", func() {
-			scraper = NewScraper(cfg, pm)
+			scraper = NewScraper(cfg, m)
 			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "text/plain")
 				_, _ = w.Write([]byte(`# HELP test_metric Test metric

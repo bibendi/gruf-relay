@@ -13,7 +13,7 @@ import (
 
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/log"
-	"github.com/bibendi/gruf-relay/internal/process"
+	"github.com/bibendi/gruf-relay/internal/worker"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	dto "github.com/prometheus/client_model/go"
@@ -21,11 +21,11 @@ import (
 )
 
 type Manager interface {
-	GetWorkers() map[string]process.Process
+	GetWorkers() map[string]worker.Worker
 }
 
 type Scraper struct {
-	pm        Manager
+	m         Manager
 	interval  time.Duration
 	port      int
 	path      string
@@ -33,13 +33,13 @@ type Scraper struct {
 	client    *http.Client
 }
 
-func NewScraper(cfg config.Metrics, pm Manager) *Scraper {
+func NewScraper(cfg config.Metrics, m Manager) *Scraper {
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
 
 	return &Scraper{
-		pm:        pm,
+		m:         m,
 		interval:  cfg.Interval,
 		port:      cfg.Port,
 		path:      cfg.Path,
@@ -119,16 +119,16 @@ func (s *Scraper) scrapeAndAggregate() {
 
 	metricsMap := make(map[string]*dto.MetricFamily)
 
-	for name, worker := range s.pm.GetWorkers() {
-		if !worker.IsRunning() {
+	for name, w := range s.m.GetWorkers() {
+		if !w.IsRunning() {
 			continue
 		}
 
 		wg.Add(1)
-		go func(p process.Process) {
+		go func(w worker.Worker) {
 			defer wg.Done()
 
-			mfList, err := s.scrapeMetrics("http://" + p.MetricsAddr())
+			mfList, err := s.scrapeMetrics("http://" + w.MetricsAddr())
 			if err != nil {
 				log.Error("Error scraping metrics", slog.String("worker", name), slog.Any("error", err))
 				return
@@ -143,7 +143,7 @@ func (s *Scraper) scrapeAndAggregate() {
 				}
 			}
 			mapMu.Unlock()
-		}(worker)
+		}(w)
 	}
 
 	wg.Wait()

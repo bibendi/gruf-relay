@@ -15,7 +15,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/bibendi/gruf-relay/internal/log"
-	"github.com/bibendi/gruf-relay/internal/process"
+	"github.com/bibendi/gruf-relay/internal/worker"
 )
 
 var (
@@ -26,7 +26,7 @@ var (
 )
 
 type Balancer interface {
-	Next() process.Process
+	Next() worker.Worker
 }
 
 type Proxy struct {
@@ -55,16 +55,16 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 	outCtx := metadata.NewOutgoingContext(timeoutCtx, md.Copy())
 	log.Debug("Request metadata", slog.Any("metadata", md))
 
-	process := p.Balancer.Next()
-	log.Debug("Selected worker", slog.Any("worker", process))
-	if process == nil {
+	worker := p.Balancer.Next()
+	log.Debug("Selected worker", slog.Any("worker", worker))
+	if worker == nil {
 		return status.Error(codes.Unavailable, "server unavailable")
 	}
 
 	downstreamCtx, downstreamCancel := context.WithCancel(outCtx)
 	defer downstreamCancel()
 
-	client, err := process.GetClient()
+	client, err := worker.GetClient()
 	if err != nil {
 		return status.Errorf(codes.Unavailable, "failed getting grpc client: %v", err)
 	}
@@ -73,7 +73,7 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 		return status.Errorf(codes.Unavailable, "failed creating downstream: %v", err)
 	}
 
-	log.Info("Proxying request", slog.String("method", fullMethod), slog.Any("worker", process))
+	log.Info("Proxying request", slog.String("method", fullMethod), slog.Any("worker", worker))
 
 	upstreamErrChan := proxyRequest(upstream, downstream)
 	downstreamErrChan := proxyResponse(downstream, upstream)
@@ -100,10 +100,10 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 			upstream.SetTrailer(downstream.Trailer())
 
 			if err == io.EOF {
-				log.Info("Finish proxying", slog.String("method", fullMethod), slog.Any("worker", process))
+				log.Info("Finish proxying", slog.String("method", fullMethod), slog.Any("worker", worker))
 				return nil
 			} else {
-				log.Error("Failed proxy response", slog.Any("worker", process), slog.Any("error", err))
+				log.Error("Failed proxy response", slog.Any("worker", worker), slog.Any("error", err))
 				return err
 			}
 		}

@@ -34,12 +34,12 @@ func main() {
 	isStarted := &atomic.Value{}
 	isStarted.Store(false)
 
-	// Run Process Manager
-	pm := manager.NewManager(cfg.Workers)
+	// Run Worker Manager
+	m := manager.NewManager(cfg.Workers)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := pm.Run(ctx); err != nil {
+		if err := m.Run(ctx); err != nil {
 			log.Error("Failed to start servers", slog.Any("error", err))
 			cancel()
 		}
@@ -54,7 +54,7 @@ func main() {
 	}()
 
 	// Run Health Checker
-	hc := healthcheck.NewChecker(cfg.HealthCheck, pm.GetWorkers(), lb, nil)
+	hc := healthcheck.NewChecker(cfg.HealthCheck, m.GetWorkers(), lb, nil)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -63,7 +63,7 @@ func main() {
 
 	// Run probes
 	if cfg.Probes.Enabled {
-		probes := probes.NewProbes(cfg.Probes, isStarted, pm, hc)
+		probes := probes.NewProbes(cfg.Probes, isStarted, m, hc)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -76,7 +76,7 @@ func main() {
 
 	// Run metrics
 	if cfg.Metrics.Enabled {
-		metrics := metrics.NewScraper(cfg.Metrics, pm)
+		metrics := metrics.NewScraper(cfg.Metrics, m)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

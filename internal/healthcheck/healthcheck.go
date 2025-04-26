@@ -9,20 +9,20 @@ import (
 
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/log"
-	"github.com/bibendi/gruf-relay/internal/process"
+	"github.com/bibendi/gruf-relay/internal/worker"
 	"google.golang.org/grpc/connectivity"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 type Balancer interface {
-	AddProcess(process.Process)
-	RemoveProcess(process.Process)
+	AddWorker(worker.Worker)
+	RemoveWorker(worker.Worker)
 }
 
-type HealthCheckFunc func(ctx context.Context, p process.Process) (healthpb.HealthCheckResponse_ServingStatus, error)
+type HealthCheckFunc func(ctx context.Context, w worker.Worker) (healthpb.HealthCheckResponse_ServingStatus, error)
 
 type Checker struct {
-	processes     map[string]process.Process
+	workers       map[string]worker.Worker
 	lb            Balancer
 	interval      time.Duration
 	timeout       time.Duration
@@ -31,13 +31,13 @@ type Checker struct {
 	healthCheckFn HealthCheckFunc
 }
 
-func NewChecker(cfg config.HealthCheck, processes map[string]process.Process, lb Balancer, healthCheckFn HealthCheckFunc) *Checker {
+func NewChecker(cfg config.HealthCheck, workers map[string]worker.Worker, lb Balancer, healthCheckFn HealthCheckFunc) *Checker {
 	if healthCheckFn == nil {
 		healthCheckFn = defaultHealthCheck
 	}
 
 	return &Checker{
-		processes:     processes,
+		workers:       workers,
 		lb:            lb,
 		interval:      cfg.Interval,
 		timeout:       cfg.Timeout,
@@ -75,31 +75,31 @@ func (c *Checker) GetServerState(name string) connectivity.State {
 
 func (c *Checker) checkAll() {
 	var wg sync.WaitGroup
-	for _, p := range c.processes {
+	for _, w := range c.workers {
 		wg.Add(1)
-		go func(p process.Process) {
+		go func(w worker.Worker) {
 			defer wg.Done()
-			state := c.checkWorker(p)
-			c.updateWorkerState(p.String(), state)
-		}(p)
+			state := c.checkWorker(w)
+			c.updateWorkerState(w.String(), state)
+		}(w)
 	}
 
 	wg.Wait()
 }
 
-func (c *Checker) checkWorker(p process.Process) connectivity.State {
-	if !p.IsRunning() {
-		c.lb.RemoveProcess(p)
-		log.Error("Worker is not running", slog.Any("worker", p), slog.Any("state", connectivity.Shutdown))
+func (c *Checker) checkWorker(w worker.Worker) connectivity.State {
+	if !w.IsRunning() {
+		c.lb.RemoveWorker(w)
+		log.Error("Worker is not running", slog.Any("worker", w), slog.Any("state", connectivity.Shutdown))
 		return connectivity.Shutdown
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
-	status, err := c.healthCheckFn(ctx, p)
+	status, err := c.healthCheckFn(ctx, w)
 	if err != nil {
-		c.lb.RemoveProcess(p)
-		log.Error("Health check failed", slog.Any("worker", p), slog.Any("error", err), slog.Any("state", connectivity.TransientFailure))
+		c.lb.RemoveWorker(w)
+		log.Error("Health check failed", slog.Any("worker", w), slog.Any("error", err), slog.Any("state", connectivity.TransientFailure))
 		return connectivity.TransientFailure
 	}
 
@@ -107,16 +107,16 @@ func (c *Checker) checkWorker(p process.Process) connectivity.State {
 	switch status {
 	case healthpb.HealthCheckResponse_SERVING:
 		state = connectivity.Ready
-		c.lb.AddProcess(p)
+		c.lb.AddWorker(w)
 	case healthpb.HealthCheckResponse_NOT_SERVING:
 		state = connectivity.TransientFailure
-		c.lb.RemoveProcess(p)
+		c.lb.RemoveWorker(w)
 	default:
 		state = connectivity.TransientFailure
-		c.lb.RemoveProcess(p)
+		c.lb.RemoveWorker(w)
 	}
 
-	log.Info("Worker is healthy", slog.Any("worker", p), slog.Any("state", state))
+	log.Info("Worker is healthy", slog.Any("worker", w), slog.Any("state", state))
 	return state
 }
 
@@ -126,8 +126,8 @@ func (c *Checker) updateWorkerState(name string, state connectivity.State) {
 	c.workerStates[name] = state
 }
 
-func defaultHealthCheck(ctx context.Context, p process.Process) (healthpb.HealthCheckResponse_ServingStatus, error) {
-	grpcClient, err := p.GetClient()
+func defaultHealthCheck(ctx context.Context, w worker.Worker) (healthpb.HealthCheckResponse_ServingStatus, error) {
+	grpcClient, err := w.GetClient()
 	if err != nil {
 		return healthpb.HealthCheckResponse_UNKNOWN, err
 	}

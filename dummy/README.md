@@ -8,7 +8,7 @@ Gruf Relay is a high-performance gRPC proxy server designed to optimize resource
 - **🏥 Health Checking**: Regular gRPC health checks with configurable intervals
 - **⚙️ Dynamic Configuration**: YAML config + environment variables support
 - **📊 Metrics Exposure**: Prometheus metrics endpoint for monitoring
-- **🔌 Process Management**: Automated worker process lifecycle management
+- **🔌 Worker Management**: Automated worker lifecycle management
 - **📈 Horizontal Scaling**: Easily scale backend worker instances
 - **📝 Structured Logging**: JSON-formatted logs with configurable levels
 
@@ -60,8 +60,8 @@ LOG_FORMAT: Logging format (default: json). Possible values: json, text.
 HOST: Host address for the gRPC proxy (default: 0.0.0.0).
 PORT: Port for the gRPC proxy (default: 8080).
 HEALTH_CHECK_INTERVAL: Interval for health checks (default: 5s).
-WORKERS_COUNT: Number of backend worker processes (default: 2).
-WORKERS_START_PORT: Starting port for worker processes (default: 9000).
+WORKERS_COUNT: Number of backend workers (default: 2).
+WORKERS_START_PORT: Starting port for workers (default: 9000).
 WORKERS_METRICS_PATH: Path for worker metrics endpoint (default: /metrics).
 PROBES_ENABLED: Enable/disable liveness/readiness probes (default: true).
 PROBES_PORT: Port for liveness/readiness probes (default: 5555).
@@ -96,7 +96,7 @@ export METRICS_ENABLED=true
 ## Architecture
 
 ### Key Components
-1. **Manager**: Controls worker processes lifecycle
+1. **Manager**: Controls worker lifecycle
 2. **Health Checker**: Monitors worker availability
 3. **Random Balancer**: Distributes requests evenly
 4. **Metrics Server**: Exposes Prometheus metrics

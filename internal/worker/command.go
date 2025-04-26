@@ -1,5 +1,5 @@
-//go:generate mockgen -source=command.go -destination=command_mock.go -package=process
-package process
+//go:generate mockgen -source=command.go -destination=command_mock.go -package=worker
+package worker
 
 import (
 	"errors"

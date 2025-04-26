@@ -12,7 +12,7 @@ package proxy
 import (
 	reflect "reflect"
 
-	process "github.com/bibendi/gruf-relay/internal/process"
+	worker "github.com/bibendi/gruf-relay/internal/worker"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -41,10 +41,10 @@ func (m *MockBalancer) EXPECT() *MockBalancerMockRecorder {
 }
 
 // Next mocks base method.
-func (m *MockBalancer) Next() process.Process {
+func (m *MockBalancer) Next() worker.Worker {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Next")
-	ret0, _ := ret[0].(process.Process)
+	ret0, _ := ret[0].(worker.Worker)
 	return ret0
 }
 

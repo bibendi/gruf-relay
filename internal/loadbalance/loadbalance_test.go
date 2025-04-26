@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bibendi/gruf-relay/internal/process"
+	"github.com/bibendi/gruf-relay/internal/worker"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
@@ -44,12 +44,12 @@ var _ = Describe("LoadBalance", func() {
 		var (
 			ctx    context.Context
 			cancel context.CancelFunc
-			worker *process.MockProcess
+			wrk    *worker.MockWorker
 		)
 
 		BeforeEach(func() {
-			worker = process.NewMockProcess(ctrl)
-			worker.EXPECT().String().Return("worker-foo").AnyTimes()
+			wrk = worker.NewMockWorker(ctrl)
+			wrk.EXPECT().String().Return("worker-foo").AnyTimes()
 
 			ctx, cancel = context.WithCancel(context.Background())
 			DeferCleanup(func() {
@@ -68,12 +68,12 @@ var _ = Describe("LoadBalance", func() {
 
 		It("adds and removes worker", func() {
 			go lb.Run(ctx)
-			lb.AddProcess(worker)
+			lb.AddWorker(wrk)
 			time.Sleep(10 * time.Millisecond)
 			nextWorker := lb.Next()
 			Expect(nextWorker).NotTo(BeNil())
-			Expect(nextWorker).To(Equal(worker))
-			lb.RemoveProcess(worker)
+			Expect(nextWorker).To(Equal(wrk))
+			lb.RemoveWorker(wrk)
 			time.Sleep(10 * time.Millisecond)
 			nextWorker = lb.Next()
 			Expect(nextWorker).To(BeNil())

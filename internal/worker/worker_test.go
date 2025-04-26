@@ -1,4 +1,4 @@
-package process
+package worker
 
 import (
 	"context"
@@ -14,10 +14,10 @@ import (
 
 func TestHealthCheck(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Process Suite")
+	RunSpecs(t, "Worker Suite")
 }
 
-var _ = Describe("Process", func() {
+var _ = Describe("Worker", func() {
 	var (
 		ctrl *gomock.Controller
 	)
@@ -30,19 +30,19 @@ var _ = Describe("Process", func() {
 		})
 	})
 
-	Describe("NewProcess", func() {
-		It("should create a new process instance", func() {
-			p := NewProcess("worker-1", 50051, 9090, "/metrics")
-			Expect(p).NotTo(BeNil())
-			Expect(p.String()).To(Equal("worker-1"))
-			Expect(p.Addr()).To(Equal(fmt.Sprintf("0.0.0.0:%d", 50051)))
-			Expect(p.MetricsAddr()).To(Equal(fmt.Sprintf("0.0.0.0:%d%s", 9090, "/metrics")))
+	Describe("NewWorker", func() {
+		It("should create a new worker instance", func() {
+			w := NewWorker("worker-1", 50051, 9090, "/metrics")
+			Expect(w).NotTo(BeNil())
+			Expect(w.String()).To(Equal("worker-1"))
+			Expect(w.Addr()).To(Equal(fmt.Sprintf("0.0.0.0:%d", 50051)))
+			Expect(w.MetricsAddr()).To(Equal(fmt.Sprintf("0.0.0.0:%d%s", 9090, "/metrics")))
 		})
 	})
 
 	Describe("Run", func() {
 		var (
-			process      *processImpl
+			worker       *workerImpl
 			ctx          context.Context
 			cancel       context.CancelFunc
 			mockExecutor *MockCommandExecutor
@@ -58,7 +58,7 @@ var _ = Describe("Process", func() {
 			mockExecutor.EXPECT().NewCommand(gomock.Any(), gomock.Any()).Return(mockCommand).AnyTimes()
 			mockCommand.EXPECT().SetEnv(gomock.Any()).AnyTimes()
 
-			process = NewProcess("worker-1", 50051, 9090, "/metrics", withExecutor)
+			worker = NewWorker("worker-1", 50051, 9090, "/metrics", withExecutor)
 
 			DeferCleanup(func() {
 				cancel()
@@ -83,9 +83,9 @@ var _ = Describe("Process", func() {
 				cancel()
 			}()
 
-			err := process.Run(ctx)
+			err := worker.Run(ctx)
 			Expect(err).NotTo(HaveOccurred())
-			Eventually(process.IsRunning()).Should(BeFalse())
+			Eventually(worker.IsRunning()).Should(BeFalse())
 		})
 
 		It("should restart if the worker exits with an error", func() {
@@ -108,9 +108,9 @@ var _ = Describe("Process", func() {
 				cancel()
 			}()
 
-			err := process.Run(ctx)
+			err := worker.Run(ctx)
 			Expect(err).NotTo(HaveOccurred())
-			Eventually(process.IsRunning()).Should(BeFalse())
+			Eventually(worker.IsRunning()).Should(BeFalse())
 		})
 	})
 })

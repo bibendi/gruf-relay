@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/bibendi/gruf-relay/internal/codec"
-	"github.com/bibendi/gruf-relay/internal/process"
+	"github.com/bibendi/gruf-relay/internal/worker"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
@@ -33,7 +33,7 @@ var _ = Describe("Proxy", func() {
 		ctx          context.Context
 		cancel       context.CancelFunc
 
-		mockProcess      *process.MockProcess
+		mockWorker       *worker.MockWorker
 		mockServerStream *MockServerStream
 		clientConn       *grpc.ClientConn
 		lis              *bufconn.Listener
@@ -44,7 +44,7 @@ var _ = Describe("Proxy", func() {
 		mockBalancer = NewMockBalancer(ctrl)
 		proxy = NewProxy(mockBalancer)
 		ctx, cancel = context.WithCancel(context.Background())
-		mockProcess = process.NewMockProcess(ctrl)
+		mockWorker = worker.NewMockWorker(ctrl)
 		mockServerStream = NewMockServerStream(ctrl)
 
 		buffer := 1024
@@ -102,8 +102,8 @@ var _ = Describe("Proxy", func() {
 
 	Describe("HandleRequest", func() {
 		It("should handle the request", func() {
-			mockBalancer.EXPECT().Next().Return(mockProcess).Times(1)
-			mockProcess.EXPECT().GetClient().Return(clientConn, nil).Times(1)
+			mockBalancer.EXPECT().Next().Return(mockWorker).Times(1)
+			mockWorker.EXPECT().GetClient().Return(clientConn, nil).Times(1)
 			mockServerStream.EXPECT().RecvMsg(gomock.Any()).Return(io.EOF).Times(1)
 			mockServerStream.EXPECT().SetTrailer(gomock.Any()).Times(1)
 
@@ -119,8 +119,8 @@ var _ = Describe("Proxy", func() {
 		})
 
 		It("Return error when can't get client", func() {
-			mockBalancer.EXPECT().Next().Return(mockProcess).Times(1)
-			mockProcess.EXPECT().GetClient().Return(nil, errors.New("Test error")).Times(1)
+			mockBalancer.EXPECT().Next().Return(mockWorker).Times(1)
+			mockWorker.EXPECT().GetClient().Return(nil, errors.New("Test error")).Times(1)
 
 			err := proxy.HandleRequest(nil, mockServerStream)
 

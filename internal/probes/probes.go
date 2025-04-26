@@ -25,14 +25,14 @@ type Manager interface {
 type Probes struct {
 	port         int
 	appIsStarted *atomic.Value
-	pm           Manager
+	m            Manager
 	hc           HealthChecker
 }
 
-func NewProbes(cfg config.Probes, isStarted *atomic.Value, pm Manager, hc HealthChecker) *Probes {
+func NewProbes(cfg config.Probes, isStarted *atomic.Value, m Manager, hc HealthChecker) *Probes {
 	probes := &Probes{
 		port:         cfg.Port,
-		pm:           pm,
+		m:            m,
 		hc:           hc,
 		appIsStarted: isStarted,
 	}
@@ -54,8 +54,8 @@ func (p *Probes) Serve(ctx context.Context) error {
 	}
 
 	mux.HandleFunc("/startup", p.handleStartupProbe(p.appIsStarted))
-	mux.HandleFunc("/readiness", p.handleReadinessProbe(p.pm, p.hc))
-	mux.HandleFunc("/liveness", p.handleLivenessrobe(p.pm, p.hc))
+	mux.HandleFunc("/readiness", p.handleReadinessProbe(p.m, p.hc))
+	mux.HandleFunc("/liveness", p.handleLivenessrobe(p.m, p.hc))
 
 	errChan := make(chan error, 1)
 	defer close(errChan)
@@ -94,10 +94,10 @@ func (p *Probes) handleStartupProbe(isStarted *atomic.Value) http.HandlerFunc {
 	}
 }
 
-func (p *Probes) handleReadinessProbe(pm Manager, hc HealthChecker) http.HandlerFunc {
+func (p *Probes) handleReadinessProbe(m Manager, hc HealthChecker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Info("Received readiness request")
-		for _, name := range pm.GetWorkerNames() {
+		for _, name := range m.GetWorkerNames() {
 			if state := hc.GetServerState(name); state == connectivity.TransientFailure || state == connectivity.Shutdown {
 				log.Error("Readiness probe failed", slog.Any("worker", name), slog.String("state", state.String()))
 				w.WriteHeader(http.StatusServiceUnavailable)
@@ -108,10 +108,10 @@ func (p *Probes) handleReadinessProbe(pm Manager, hc HealthChecker) http.Handler
 	}
 }
 
-func (p *Probes) handleLivenessrobe(pm Manager, hc HealthChecker) http.HandlerFunc {
+func (p *Probes) handleLivenessrobe(m Manager, hc HealthChecker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Info("Received liveness request")
-		for _, name := range pm.GetWorkerNames() {
+		for _, name := range m.GetWorkerNames() {
 			if state := hc.GetServerState(name); state == connectivity.Shutdown {
 				log.Error("Liveness probe failed", slog.Any("worker", name), slog.String("state", state.String()))
 				w.WriteHeader(http.StatusServiceUnavailable)

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/config"
-	"github.com/bibendi/gruf-relay/internal/process"
+	"github.com/bibendi/gruf-relay/internal/worker"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
@@ -39,7 +39,7 @@ var _ = Describe("Manager", func() {
 	})
 
 	Describe("NewManager", func() {
-		It("should create a new manager with the correct number of processes", func() {
+		It("should create a new manager with the correct number of workers", func() {
 			manager := NewManager(workersCfg)
 			Expect(manager).NotTo(BeNil())
 			Expect(len(manager.GetWorkers())).To(Equal(2))
@@ -47,37 +47,37 @@ var _ = Describe("Manager", func() {
 	})
 
 	Describe("Run", func() {
-		It("runs all processes correctly", func() {
+		It("runs all workers correctly", func() {
 			ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
-			process1 := process.NewMockProcess(ctrl)
-			process2 := process.NewMockProcess(ctrl)
-			process1.EXPECT().Run(gomock.Any()).Return(nil)
-			process2.EXPECT().Run(gomock.Any()).Return(nil)
+			worker1 := worker.NewMockWorker(ctrl)
+			worker2 := worker.NewMockWorker(ctrl)
+			worker1.EXPECT().Run(gomock.Any()).Return(nil)
+			worker2.EXPECT().Run(gomock.Any()).Return(nil)
 
 			manager := NewManager(workersCfg)
-			manager.processes = map[string]process.Process{
-				"worker-1": process1,
-				"worker-2": process2,
+			manager.workers = map[string]worker.Worker{
+				"worker-1": worker1,
+				"worker-2": worker2,
 			}
 
 			err := manager.Run(ctx)
 			Expect(err).To(BeNil())
 		})
 
-		It("returns an error if one of the processes fails to start", func() {
+		It("returns an error if one of the workers fails to start", func() {
 			ctx := context.Background()
-			process1 := process.NewMockProcess(ctrl)
-			process2 := process.NewMockProcess(ctrl)
+			worker1 := worker.NewMockWorker(ctrl)
+			worker2 := worker.NewMockWorker(ctrl)
 			expectedError := errors.New("failed to start process")
-			process1.EXPECT().Run(gomock.Any()).Return(expectedError)
-			process1.EXPECT().String().Return("worker-1").AnyTimes()
-			process2.EXPECT().Run(gomock.Any()).Return(nil).AnyTimes()
-			process2.EXPECT().String().Return("worker-2").AnyTimes()
+			worker1.EXPECT().Run(gomock.Any()).Return(expectedError)
+			worker1.EXPECT().String().Return("worker-1").AnyTimes()
+			worker2.EXPECT().Run(gomock.Any()).Return(nil).AnyTimes()
+			worker2.EXPECT().String().Return("worker-2").AnyTimes()
 
 			manager := NewManager(workersCfg)
-			manager.processes = map[string]process.Process{
-				"worker-1": process1,
-				"worker-2": process2,
+			manager.workers = map[string]worker.Worker{
+				"worker-1": worker1,
+				"worker-2": worker2,
 			}
 
 			err := manager.Run(ctx)

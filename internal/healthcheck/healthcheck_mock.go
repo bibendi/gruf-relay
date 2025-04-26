@@ -12,7 +12,7 @@ package healthcheck
 import (
 	reflect "reflect"
 
-	process "github.com/bibendi/gruf-relay/internal/process"
+	worker "github.com/bibendi/gruf-relay/internal/worker"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -40,26 +40,26 @@ func (m *MockBalancer) EXPECT() *MockBalancerMockRecorder {
 	return m.recorder
 }
 
-// AddProcess mocks base method.
-func (m *MockBalancer) AddProcess(arg0 process.Process) {
+// AddWorker mocks base method.
+func (m *MockBalancer) AddWorker(arg0 worker.Worker) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddProcess", arg0)
+	m.ctrl.Call(m, "AddWorker", arg0)
 }
 
-// AddProcess indicates an expected call of AddProcess.
-func (mr *MockBalancerMockRecorder) AddProcess(arg0 any) *gomock.Call {
+// AddWorker indicates an expected call of AddWorker.
+func (mr *MockBalancerMockRecorder) AddWorker(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddProcess", reflect.TypeOf((*MockBalancer)(nil).AddProcess), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddWorker", reflect.TypeOf((*MockBalancer)(nil).AddWorker), arg0)
 }
 
-// RemoveProcess mocks base method.
-func (m *MockBalancer) RemoveProcess(arg0 process.Process) {
+// RemoveWorker mocks base method.
+func (m *MockBalancer) RemoveWorker(arg0 worker.Worker) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RemoveProcess", arg0)
+	m.ctrl.Call(m, "RemoveWorker", arg0)
 }
 
-// RemoveProcess indicates an expected call of RemoveProcess.
-func (mr *MockBalancerMockRecorder) RemoveProcess(arg0 any) *gomock.Call {
+// RemoveWorker indicates an expected call of RemoveWorker.
+func (mr *MockBalancerMockRecorder) RemoveWorker(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveProcess", reflect.TypeOf((*MockBalancer)(nil).RemoveProcess), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveWorker", reflect.TypeOf((*MockBalancer)(nil).RemoveWorker), arg0)
 }

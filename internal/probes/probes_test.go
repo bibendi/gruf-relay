@@ -27,7 +27,7 @@ var _ = Describe("Probes", func() {
 		cancel    context.CancelFunc
 		cfg       config.Probes
 		isStarted *atomic.Value
-		pm        *MockManager
+		m         *MockManager
 		hc        *MockHealthChecker
 	)
 
@@ -36,8 +36,8 @@ var _ = Describe("Probes", func() {
 		isStarted = &atomic.Value{}
 		isStarted.Store(true)
 		cfg = config.Probes{Port: 6014}
-		pm = NewMockManager(ctrl)
-		pm.EXPECT().GetWorkerNames().Return([]string{"worker-a"}).AnyTimes()
+		m = NewMockManager(ctrl)
+		m.EXPECT().GetWorkerNames().Return([]string{"worker-a"}).AnyTimes()
 		hc = NewMockHealthChecker(ctrl)
 
 		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
@@ -49,7 +49,7 @@ var _ = Describe("Probes", func() {
 	})
 
 	JustBeforeEach(func() {
-		pb = NewProbes(cfg, isStarted, pm, hc)
+		pb = NewProbes(cfg, isStarted, m, hc)
 	})
 
 	Describe("NewProbes", func() {

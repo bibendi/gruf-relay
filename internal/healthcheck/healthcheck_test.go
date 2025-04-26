@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/bibendi/gruf-relay/internal/config"
-	"github.com/bibendi/gruf-relay/internal/process"
+	"github.com/bibendi/gruf-relay/internal/worker"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
@@ -40,12 +40,12 @@ var _ = Describe("HealthCheck", func() {
 
 	Describe("NewChecker", func() {
 		It("should create a new health checker", func() {
-			processes := map[string]process.Process{
-				"worker-1": process.NewMockProcess(ctrl),
-				"worker-2": process.NewMockProcess(ctrl),
+			workers := map[string]worker.Worker{
+				"worker-1": worker.NewMockWorker(ctrl),
+				"worker-2": worker.NewMockWorker(ctrl),
 			}
 			lb := NewMockBalancer(ctrl)
-			checker := NewChecker(cfg, processes, lb, nil)
+			checker := NewChecker(cfg, workers, lb, nil)
 			Expect(checker).NotTo(BeNil())
 		})
 	})
@@ -53,12 +53,12 @@ var _ = Describe("HealthCheck", func() {
 	Describe("Run", func() {
 		It("runs health checking", func() {
 			ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
-			processes := map[string]process.Process{
-				"worker-1": process.NewMockProcess(ctrl),
-				"worker-2": process.NewMockProcess(ctrl),
+			workers := map[string]worker.Worker{
+				"worker-1": worker.NewMockWorker(ctrl),
+				"worker-2": worker.NewMockWorker(ctrl),
 			}
 			lb := NewMockBalancer(ctrl)
-			checker := NewChecker(cfg, processes, lb, nil)
+			checker := NewChecker(cfg, workers, lb, nil)
 			Expect(func() {
 				checker.Run(ctx)
 			}).NotTo(Panic())
@@ -68,53 +68,53 @@ var _ = Describe("HealthCheck", func() {
 	Describe("checkAll", func() {
 		var (
 			lb            *MockBalancer
-			processA      *process.MockProcess
-			processes     map[string]process.Process
+			workerA       *worker.MockWorker
+			workers       map[string]worker.Worker
 			checker       *Checker
 			healthcheckFn HealthCheckFunc
 		)
 
 		BeforeEach(func() {
-			processA = process.NewMockProcess(ctrl)
-			processes = map[string]process.Process{"worker-a": processA}
-			processA.EXPECT().String().Return("worker-a").AnyTimes()
+			workerA = worker.NewMockWorker(ctrl)
+			workers = map[string]worker.Worker{"worker-a": workerA}
+			workerA.EXPECT().String().Return("worker-a").AnyTimes()
 			lb = NewMockBalancer(ctrl)
-			healthcheckFn = func(ctx context.Context, p process.Process) (healthpb.HealthCheckResponse_ServingStatus, error) {
+			healthcheckFn = func(ctx context.Context, w worker.Worker) (healthpb.HealthCheckResponse_ServingStatus, error) {
 				return healthpb.HealthCheckResponse_SERVING, nil
 			}
 		})
 
 		JustBeforeEach(func() {
-			checker = NewChecker(cfg, processes, lb, healthcheckFn)
+			checker = NewChecker(cfg, workers, lb, healthcheckFn)
 		})
 
 		It("updates state to ready when worker is healthy", func() {
-			processA.EXPECT().IsRunning().Return(true)
-			lb.EXPECT().AddProcess(processA)
+			workerA.EXPECT().IsRunning().Return(true)
+			lb.EXPECT().AddWorker(workerA)
 			checker.checkAll()
-			Expect(checker.GetServerState(processA.String())).To(Equal(connectivity.Ready))
+			Expect(checker.GetServerState(workerA.String())).To(Equal(connectivity.Ready))
 		})
 
 		It("updates state to shoutdown when worker is not running", func() {
-			processA.EXPECT().IsRunning().Return(false)
-			lb.EXPECT().RemoveProcess(processA)
+			workerA.EXPECT().IsRunning().Return(false)
+			lb.EXPECT().RemoveWorker(workerA)
 			checker.checkAll()
-			Expect(checker.GetServerState(processA.String())).To(Equal(connectivity.Shutdown))
+			Expect(checker.GetServerState(workerA.String())).To(Equal(connectivity.Shutdown))
 		})
 
 		Context("when grpc error", func() {
 			BeforeEach(func() {
-				healthcheckFn = func(ctx context.Context, p process.Process) (healthpb.HealthCheckResponse_ServingStatus, error) {
+				healthcheckFn = func(ctx context.Context, w worker.Worker) (healthpb.HealthCheckResponse_ServingStatus, error) {
 					return healthpb.HealthCheckResponse_NOT_SERVING, fmt.Errorf("no connection")
 				}
 			})
 
 			It("updates state to transient failure when no connection", func() {
-				processA.EXPECT().IsRunning().Return(true)
-				lb.EXPECT().RemoveProcess(processA)
+				workerA.EXPECT().IsRunning().Return(true)
+				lb.EXPECT().RemoveWorker(workerA)
 
 				checker.checkAll()
-				Expect(checker.GetServerState(processA.String()).String()).To(Equal(connectivity.TransientFailure.String()))
+				Expect(checker.GetServerState(workerA.String()).String()).To(Equal(connectivity.TransientFailure.String()))
 			})
 		})
 	})

@@ -12,7 +12,7 @@ package metrics
 import (
 	reflect "reflect"
 
-	process "github.com/bibendi/gruf-relay/internal/process"
+	worker "github.com/bibendi/gruf-relay/internal/worker"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -41,10 +41,10 @@ func (m *MockManager) EXPECT() *MockManagerMockRecorder {
 }
 
 // GetWorkers mocks base method.
-func (m *MockManager) GetWorkers() map[string]process.Process {
+func (m *MockManager) GetWorkers() map[string]worker.Worker {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetWorkers")
-	ret0, _ := ret[0].(map[string]process.Process)
+	ret0, _ := ret[0].(map[string]worker.Worker)
 	return ret0
 }
 
