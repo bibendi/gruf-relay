@@ -5,4 +5,4 @@ PROTO_FILE="proto/health.proto"
 exec grpcurl \
   -plaintext \
   --proto "$PROTO_FILE" \
-  0.0.0.0:8080 grpc.health.v1.Health/Check
+  ${HOST:-0.0.0.0}:${PORT:-8080} grpc.health.v1.Health/Check

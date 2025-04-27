@@ -6,6 +6,7 @@ VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "0.1.0-dev
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 GEM_VERSION ?= $(VERSION)
+CMD ?= gruf-relay
 
 PLATFORMS = linux-amd64 linux-arm64 darwin-amd64 darwin-arm64
 
@@ -84,6 +85,29 @@ publish-gem-darwin-amd64: build-gem-darwin-amd64
 .PHONY: publish-gem-darwin-arm64
 publish-gem-darwin-arm64: build-gem-darwin-arm64
 	cd $(GEM_DIR) && gem push $(APP_NAME)-$(GEM_VERSION)-darwin-arm64.gem
+
+.PHONY: build-docker
+build-docker: build-gems
+	@echo "Building Docker image for $(APP_NAME):$(VERSION)"
+	docker build \
+		-t $(APP_NAME):$(VERSION) \
+		-f dummy/kubernetes/Dockerfile .
+
+.PHONY: run-docker
+run-docker:
+	docker run -p 8080:8080 -p 9394:9394 -p 5555:5555 \
+		-it --rm \
+		--name $(APP_NAME) $(APP_NAME):$(VERSION) $(cmd)
+
+.PHONY: k8s-apply
+k8s-apply:
+	VERSION=$(VERSION) CMD=$(CMD) envsubst < dummy/kubernetes/deployment.yaml | kubectl apply -f -
+	VERSION=$(VERSION) CMD=$(CMD) envsubst < dummy/kubernetes/service.yaml | kubectl apply -f -
+
+.PHONY: k8s-delete
+k8s-delete:
+	VERSION=$(VERSION) CMD=$(CMD) envsubst < dummy/kubernetes/service.yaml | kubectl delete -f -
+	VERSION=$(VERSION) CMD=$(CMD) envsubst < dummy/kubernetes/deployment.yaml | kubectl delete -f -
 
 .PHONY: clean
 clean:

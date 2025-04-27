@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gruf-relay-grpc
+spec:
+  type: LoadBalancer
+  selector:
+    app: gruf-relay
+  ports:
+  - name: grpc
+    protocol: TCP
+    port: 8080
+    targetPort: 8080

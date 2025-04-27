@@ -1,3 +1,8 @@
+PATH
+  remote: ../gem
+  specs:
+    gruf-relay (0.1.0)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -74,28 +79,17 @@ GEM
       uri (>= 0.13.1)
     anyway_config (2.7.2)
       ruby-next-core (~> 1.0)
-    ast (2.4.2)
     base64 (0.2.0)
     benchmark (0.4.0)
     bigdecimal (3.1.9)
-    brakeman (7.0.0)
-      racc
     builder (3.3.0)
     concurrent-ruby (1.3.5)
     connection_pool (2.5.0)
     crass (1.0.6)
     date (3.4.1)
-    debug (1.10.0)
-      irb (~> 1.10)
-      reline (>= 0.3.8)
     drb (2.2.1)
     dry-initializer (3.2.0)
     erubi (1.13.1)
-    et-orbi (1.2.11)
-      tzinfo
-    fugit (1.11.1)
-      et-orbi (~> 1, >= 1.2.11)
-      raabro (~> 1.4)
     globalid (1.2.1)
       activesupport (>= 6.1)
     google-protobuf (4.29.3)
@@ -153,8 +147,6 @@ GEM
       rdoc (>= 4.0.0)
       reline (>= 0.4.2)
     json (2.10.1)
-    language_server-protocol (3.17.0.4)
-    lint_roller (1.1.0)
     logger (1.6.6)
     loofah (2.24.0)
       crass (~> 1.0.2)
@@ -190,14 +182,30 @@ GEM
     nokogiri (1.18.3-x86_64-linux-gnu)
       racc (~> 1.4)
     ostruct (0.6.1)
-    parallel (1.26.3)
-    parser (3.3.7.1)
-      ast (~> 2.4.1)
-      racc
     pp (0.6.2)
       prettyprint
     prettyprint (0.2.0)
+    prometheus-client-mmap (1.2.9)
+      base64
+      bigdecimal
+      logger
+      rb_sys (~> 0.9.109)
+    prometheus-client-mmap (1.2.9-aarch64-linux-gnu)
+      base64
+      bigdecimal
+      logger
+      rb_sys (~> 0.9.109)
     prometheus-client-mmap (1.2.9-arm64-darwin)
+      base64
+      bigdecimal
+      logger
+      rb_sys (~> 0.9.109)
+    prometheus-client-mmap (1.2.9-x86_64-darwin)
+      base64
+      bigdecimal
+      logger
+      rb_sys (~> 0.9.109)
+    prometheus-client-mmap (1.2.9-x86_64-linux-gnu)
       base64
       bigdecimal
       logger
@@ -212,7 +220,6 @@ GEM
       stringio
     puma (6.6.0)
       nio4r (~> 2.0)
-    raabro (1.4.0)
     racc (1.8.1)
     rack (2.2.13)
     rack-session (1.0.2)
@@ -251,71 +258,22 @@ GEM
       rake (>= 12.2)
       thor (~> 1.0, >= 1.2.2)
       zeitwerk (~> 2.6)
-    rainbow (3.1.1)
     rake (13.2.1)
     rake-compiler-dock (1.9.1)
     rb_sys (0.9.111)
       rake-compiler-dock (= 1.9.1)
     rdoc (6.12.0)
       psych (>= 4.0.0)
-    regexp_parser (2.10.0)
     reline (0.6.0)
       io-console (~> 0.5)
-    rubocop (1.73.1)
-      json (~> 2.3)
-      language_server-protocol (~> 3.17.0.2)
-      lint_roller (~> 1.1.0)
-      parallel (~> 1.10)
-      parser (>= 3.3.0.2)
-      rainbow (>= 2.2.2, < 4.0)
-      regexp_parser (>= 2.9.3, < 3.0)
-      rubocop-ast (>= 1.38.0, < 2.0)
-      ruby-progressbar (~> 1.7)
-      unicode-display_width (>= 2.4.0, < 4.0)
-    rubocop-ast (1.38.1)
-      parser (>= 3.3.1.0)
-    rubocop-performance (1.24.0)
-      lint_roller (~> 1.1)
-      rubocop (>= 1.72.1, < 2.0)
-      rubocop-ast (>= 1.38.0, < 2.0)
-    rubocop-rails (2.30.2)
-      activesupport (>= 4.2.0)
-      lint_roller (~> 1.1)
-      rack (>= 1.1)
-      rubocop (>= 1.72.1, < 2.0)
-      rubocop-ast (>= 1.38.0, < 2.0)
-    rubocop-rails-omakase (1.1.0)
-      rubocop (>= 1.72)
-      rubocop-performance (>= 1.24)
-      rubocop-rails (>= 2.30)
     ruby-next-core (1.1.1)
-    ruby-progressbar (1.13.0)
     securerandom (0.4.1)
     slop (4.10.1)
-    solid_cache (1.0.7)
-      activejob (>= 7.2)
-      activerecord (>= 7.2)
-      railties (>= 7.2)
-    solid_queue (1.1.3)
-      activejob (>= 7.1)
-      activerecord (>= 7.1)
-      concurrent-ruby (>= 1.3.1)
-      fugit (~> 1.11.0)
-      railties (>= 7.1)
-      thor (~> 1.3.1)
     stringio (3.1.5)
     thor (1.3.2)
-    thruster (0.1.11)
-    thruster (0.1.11-aarch64-linux)
-    thruster (0.1.11-arm64-darwin)
-    thruster (0.1.11-x86_64-darwin)
-    thruster (0.1.11-x86_64-linux)
     timeout (0.4.3)
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
-    unicode-display_width (3.1.4)
-      unicode-emoji (~> 4.0, >= 4.0.4)
-    unicode-emoji (4.0.4)
     uri (1.0.3)
     useragent (0.16.11)
     webrick (1.9.1)
@@ -341,18 +299,13 @@ PLATFORMS
   x86_64-linux
 
 DEPENDENCIES
-  brakeman
-  debug
   gruf
+  gruf-relay!
   ostruct
   propshaft
   puma (>= 5.0)
   rack (< 3)
   rails (~> 8.0.1)
-  rubocop-rails-omakase
-  solid_cache
-  solid_queue
-  thruster
   tzinfo-data
   yabeda
   yabeda-prometheus-mmap

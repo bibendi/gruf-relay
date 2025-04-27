@@ -1,18 +1,19 @@
 # frozen_string_literal: true
 
 logger = Logger.new($stdout)
-logger.level = Logger::INFO
+logger.level = Logger::DEBUG
 
 require_relative "../../pkg/server/jobs_pb"
 require_relative "../../pkg/server/jobs_services_pb"
 require_relative "../../lib/metrics/gruf/stats_collector"
-require_relative "../../lib/metrics/gruf/metrics_subscribers"
+require_relative "../../lib/metrics/gruf/metrics_subscriber"
 require_relative "../../lib/metrics/gruf/instrumentation_interceptor"
 
 Gruf.configure do |c|
   c.logger = logger
   c.grpc_logger = logger
-  c.rpc_server_options = c.rpc_server_options.merge(pool_size: 5)
+  c.server_binding_url = "0.0.0.0:8080"
+  c.rpc_server_options = c.rpc_server_options.merge(pool_size: ENV.fetch("RAILS_MAX_THREADS", "5").to_i)
   c.interceptors.use(
     Gruf::Interceptors::Instrumentation::RequestLogging::Interceptor,
     log_parameters: true,

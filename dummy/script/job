@@ -5,4 +5,4 @@ PROTO_FILE="proto/jobs.proto"
 exec grpcurl \
   -plaintext -d '{"id": 123}' \
   --proto "$PROTO_FILE" \
-  0.0.0.0:8080 demo.Jobs/GetJob
+  ${HOST:-0.0.0.0}:${PORT:-8080} demo.Jobs/GetJob
