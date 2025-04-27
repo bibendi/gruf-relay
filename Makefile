@@ -6,7 +6,6 @@ VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "0.1.0-dev
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 GEM_VERSION ?= $(VERSION)
-CMD ?= gruf-relay
 
 PLATFORMS = linux-amd64 linux-arm64 darwin-amd64 darwin-arm64
 
@@ -101,13 +100,17 @@ run-docker:
 
 .PHONY: k8s-apply
 k8s-apply:
-	VERSION=$(VERSION) CMD=$(CMD) envsubst < dummy/kubernetes/deployment.yaml | kubectl apply -f -
-	VERSION=$(VERSION) CMD=$(CMD) envsubst < dummy/kubernetes/service.yaml | kubectl apply -f -
+	VERSION=$(VERSION) envsubst < dummy/kubernetes/deployment.yaml | kubectl apply -f -
+	VERSION=$(VERSION) envsubst < dummy/kubernetes/service.yaml | kubectl apply -f -
 
 .PHONY: k8s-delete
 k8s-delete:
-	VERSION=$(VERSION) CMD=$(CMD) envsubst < dummy/kubernetes/service.yaml | kubectl delete -f -
-	VERSION=$(VERSION) CMD=$(CMD) envsubst < dummy/kubernetes/deployment.yaml | kubectl delete -f -
+	VERSION=$(VERSION) envsubst < dummy/kubernetes/service.yaml | kubectl delete -f -
+	VERSION=$(VERSION) envsubst < dummy/kubernetes/deployment.yaml | kubectl delete -f -
+
+.PHONY: k6-run
+k6-run:
+	cd dummy && k6 run k6.js
 
 .PHONY: clean
 clean:
