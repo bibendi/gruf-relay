@@ -63,7 +63,7 @@ func main() {
 	}()
 
 	// Run Load Balancer
-	lb := loadbalance.NewRandomBalancer()
+	lb := loadbalance.NewLoadBalancer()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

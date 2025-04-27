@@ -19,7 +19,7 @@ func TestHealthCheck(t *testing.T) {
 var _ = Describe("LoadBalance", func() {
 	var (
 		ctrl *gomock.Controller
-		lb   *RandomBalancer
+		lb   *LoadBalancer
 	)
 
 	BeforeEach(func() {
@@ -31,10 +31,10 @@ var _ = Describe("LoadBalance", func() {
 	})
 
 	JustBeforeEach(func() {
-		lb = NewRandomBalancer()
+		lb = NewLoadBalancer()
 	})
 
-	Describe("NewRandomBalancer", func() {
+	Describe("NewLoadBalancer", func() {
 		It("should create a new random balancer", func() {
 			Expect(lb).NotTo(BeNil())
 		})

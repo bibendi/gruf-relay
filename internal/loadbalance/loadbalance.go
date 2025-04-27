@@ -3,7 +3,6 @@ package loadbalance
 import (
 	"context"
 	"log/slog"
-	"math/rand"
 	"sync"
 	"sync/atomic"
 
@@ -13,33 +12,34 @@ import (
 	"github.com/bibendi/gruf-relay/internal/worker"
 )
 
-type RandomBalancer struct {
+type LoadBalancer struct {
 	addChan     chan worker.Worker
 	removeChan  chan worker.Worker
 	workers     atomic.Value
 	workerNames map[string]bool
 	mu          sync.Mutex
+	nextIndex   uint64
 }
 
-func NewRandomBalancer() *RandomBalancer {
-	rb := &RandomBalancer{
+func NewLoadBalancer() *LoadBalancer {
+	lb := &LoadBalancer{
 		addChan:     make(chan worker.Worker),
 		removeChan:  make(chan worker.Worker),
 		workerNames: make(map[string]bool),
 	}
-	rb.workers.Store([]worker.Worker{})
-	return rb
+	lb.workers.Store([]worker.Worker{})
+	return lb
 }
 
-func (rb *RandomBalancer) Run(ctx context.Context) {
+func (lb *LoadBalancer) Run(ctx context.Context) {
 	log.Info("Starting load balancer")
 
 	for {
 		select {
-		case w := <-rb.addChan:
-			rb.onAddWorker(w)
-		case w := <-rb.removeChan:
-			rb.onRemoveWorker(w)
+		case w := <-lb.addChan:
+			lb.onAddWorker(w)
+		case w := <-lb.removeChan:
+			lb.onRemoveWorker(w)
 		case <-ctx.Done():
 			log.Info("Stopping load balancer")
 			return
@@ -47,46 +47,48 @@ func (rb *RandomBalancer) Run(ctx context.Context) {
 	}
 }
 
-func (rb *RandomBalancer) AddWorker(w worker.Worker) {
-	rb.addChan <- w
+func (lb *LoadBalancer) AddWorker(w worker.Worker) {
+	lb.addChan <- w
 }
 
-func (rb *RandomBalancer) RemoveWorker(w worker.Worker) {
-	rb.removeChan <- w
+func (lb *LoadBalancer) RemoveWorker(w worker.Worker) {
+	lb.removeChan <- w
 }
 
-func (rb *RandomBalancer) Next() worker.Worker {
-	workers := rb.workers.Load().([]worker.Worker)
-	if len(workers) == 0 {
+func (lb *LoadBalancer) Next() worker.Worker {
+	workers := lb.workers.Load().([]worker.Worker)
+
+	n := uint64(len(workers))
+	if n == 0 {
 		return nil
 	}
 
-	index := rand.Intn(len(workers))
-	return workers[index]
+	next := atomic.AddUint64(&lb.nextIndex, 1) % n
+	return workers[next]
 }
 
-func (rb *RandomBalancer) onAddWorker(w worker.Worker) {
-	rb.mu.Lock()
-	defer rb.mu.Unlock()
+func (lb *LoadBalancer) onAddWorker(w worker.Worker) {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
 
-	if _, ok := rb.workerNames[w.String()]; ok {
+	if _, ok := lb.workerNames[w.String()]; ok {
 		return
 	}
 	log.Debug("Adding worker to load balancer", slog.Any("worker", w))
-	currentWorkers := rb.workers.Load().([]worker.Worker)
-	rb.workers.Store(append(currentWorkers, w))
-	rb.workerNames[w.String()] = true
+	currentWorkers := lb.workers.Load().([]worker.Worker)
+	lb.workers.Store(append(currentWorkers, w))
+	lb.workerNames[w.String()] = true
 }
 
-func (rb *RandomBalancer) onRemoveWorker(w worker.Worker) {
-	rb.mu.Lock()
-	defer rb.mu.Unlock()
+func (lb *LoadBalancer) onRemoveWorker(w worker.Worker) {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
 
-	if _, ok := rb.workerNames[w.String()]; !ok {
+	if _, ok := lb.workerNames[w.String()]; !ok {
 		return
 	}
 	log.Debug("Removing worker from load balancer", slog.Any("worker", w))
-	currentWorkers := rb.workers.Load().([]worker.Worker)
+	currentWorkers := lb.workers.Load().([]worker.Worker)
 	var newWorkers []worker.Worker
 	for i, cw := range currentWorkers {
 		if cw.String() == w.String() {
@@ -94,6 +96,6 @@ func (rb *RandomBalancer) onRemoveWorker(w worker.Worker) {
 			break
 		}
 	}
-	delete(rb.workerNames, w.String())
-	rb.workers.Store(newWorkers)
+	delete(lb.workerNames, w.String())
+	lb.workers.Store(newWorkers)
 }
