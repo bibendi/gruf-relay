@@ -49,8 +49,9 @@ type Log struct {
 }
 
 type Server struct {
-	Host string `yaml:"host" env:"SERVER_HOST" env-default:"0.0.0.0"`
-	Port int    `yaml:"port" env:"SERVER_PORT" env-default:"8080"`
+	Host         string        `yaml:"host" env:"SERVER_HOST" env-default:"0.0.0.0"`
+	Port         int           `yaml:"port" env:"SERVER_PORT" env-default:"8080"`
+	ProxyTimeout time.Duration `yaml:"proxy_timeout" env:"SERVER_PROXY_TIMEOUT" env-default:"2s"`
 }
 
 type Workers struct {

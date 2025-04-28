@@ -30,12 +30,14 @@ type Balancer interface {
 }
 
 type Proxy struct {
-	Balancer Balancer
+	Balancer       Balancer
+	requestTimeout time.Duration
 }
 
-func NewProxy(balancer Balancer) *Proxy {
+func NewProxy(balancer Balancer, requestTimeout time.Duration) *Proxy {
 	return &Proxy{
-		Balancer: balancer,
+		Balancer:       balancer,
+		requestTimeout: requestTimeout,
 	}
 }
 
@@ -61,7 +63,7 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 		return status.Error(codes.Unavailable, "server unavailable")
 	}
 
-	downstreamCtx, downstreamCancel := context.WithCancel(outCtx)
+	downstreamCtx, downstreamCancel := context.WithTimeout(outCtx, p.requestTimeout)
 	defer downstreamCancel()
 
 	client, err := worker.GetClient()

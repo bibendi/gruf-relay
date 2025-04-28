@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: gruf-relay
 spec:
-  replicas: 2
+  replicas: 4
   selector:
     matchLabels:
       app: gruf-relay
@@ -15,8 +15,8 @@ spec:
       containers:
       - name: gruf-relay
         image: gruf-relay:${VERSION}
-        command: ["bundle", "exec", "gruf-relay"]
-        # command: ["bundle", "exec", "gruf"]
+        # command: ["bundle", "exec", "gruf-relay"]
+        command: ["bundle", "exec", "gruf"]
         env:
         - name: PROMETHEUS_EXPORTER_PORT
           value: "9394"
@@ -35,7 +35,7 @@ spec:
             cpu: "100m"
             memory: "200Mi"
           limits:
-            cpu: "1000m"
+            cpu: "500m"
             memory: "800Mi"
         # startupProbe:
         #   httpGet:

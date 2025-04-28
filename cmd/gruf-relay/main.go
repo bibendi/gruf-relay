@@ -105,7 +105,7 @@ func main() {
 	}
 
 	// Run gRPC server
-	grpcProxy := proxy.NewProxy(lb)
+	grpcProxy := proxy.NewProxy(lb, cfg.Server.ProxyTimeout)
 	grpcServer := server.NewServer(cfg.Server, grpcProxy)
 	wg.Add(1)
 	go func() {

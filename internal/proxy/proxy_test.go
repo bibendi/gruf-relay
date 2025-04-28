@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/bibendi/gruf-relay/internal/codec"
 	"github.com/bibendi/gruf-relay/internal/worker"
@@ -42,7 +43,7 @@ var _ = Describe("Proxy", func() {
 	BeforeEach(func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockBalancer = NewMockBalancer(ctrl)
-		proxy = NewProxy(mockBalancer)
+		proxy = NewProxy(mockBalancer, 2*time.Second)
 		ctx, cancel = context.WithCancel(context.Background())
 		mockWorker = worker.NewMockWorker(ctrl)
 		mockServerStream = NewMockServerStream(ctrl)
