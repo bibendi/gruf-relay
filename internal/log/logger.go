@@ -83,10 +83,6 @@ type Logger interface {
 }
 
 func newLogger(w io.Writer, level slog.Level, format LogFormat) (*slog.Logger, error) {
-	handlerOpts := &slog.HandlerOptions{
-		Level: level,
-	}
-
 	if w == nil {
 		w = os.Stdout
 	}
@@ -94,11 +90,11 @@ func newLogger(w io.Writer, level slog.Level, format LogFormat) (*slog.Logger, e
 	var handler slog.Handler
 	switch format {
 	case LogFormatJSON:
-		handler = slog.NewJSONHandler(w, handlerOpts)
+		handler = slog.NewJSONHandler(w, &slog.HandlerOptions{Level: level})
 	case LogFormatText:
-		handler = slog.NewTextHandler(w, handlerOpts)
+		handler = slog.NewTextHandler(w, &slog.HandlerOptions{Level: level})
 	case LogFormatPretty:
-		handler = tint.NewHandler(w, nil)
+		handler = tint.NewHandler(w, &tint.Options{Level: level})
 	default:
 		return nil, fmt.Errorf("invalid log format: %s", format)
 	}
