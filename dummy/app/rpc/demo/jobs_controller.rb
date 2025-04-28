@@ -9,8 +9,10 @@ module Demo
     # @return [Demo::GetJobResp] The job response
     #
     def get_job
-      sleep 0.1 # simulate IO
-      calculate_fibonacci(32) # simulate CPU
+      calculate_fibonacci(20) # simulate CPU
+      sleep 0.03 # simulate IO
+      calculate_fibonacci(20) # simulate CPU
+      sleep 0.03 # simulate IO
 
       Demo::GetJobResp.new(id: 101)
     rescue StandardError => e
