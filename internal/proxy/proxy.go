@@ -50,26 +50,25 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 	}
 	log.Info("Handle gRPC request", slog.String("method", fullMethod))
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 1000*time.Second)
-	defer cancel()
-
-	md, _ := metadata.FromIncomingContext(ctx)
-	outCtx := metadata.NewOutgoingContext(timeoutCtx, md.Copy())
-	log.Debug("Request metadata", slog.Any("metadata", md))
-
 	worker := p.Balancer.Next()
 	log.Debug("Selected worker", slog.Any("worker", worker))
 	if worker == nil {
 		return status.Error(codes.Unavailable, "server unavailable")
 	}
-
-	downstreamCtx, downstreamCancel := context.WithTimeout(outCtx, p.requestTimeout)
-	defer downstreamCancel()
-
 	client, err := worker.GetClient()
 	if err != nil {
 		return status.Errorf(codes.Unavailable, "failed getting grpc client: %v", err)
 	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, p.requestTimeout)
+	defer cancel()
+
+	md, _ := metadata.FromIncomingContext(ctx)
+	outCtx := metadata.NewOutgoingContext(timeoutCtx, md.Copy())
+	log.Debug("Request metadata", slog.Any("metadata", md))
+	downstreamCtx, downstreamCancel := context.WithCancel(outCtx)
+	defer downstreamCancel()
+
 	downstream, err := grpc.NewClientStream(downstreamCtx, downstreamDescForProxying, client, fullMethod)
 	if err != nil {
 		return status.Errorf(codes.Unavailable, "failed creating downstream: %v", err)

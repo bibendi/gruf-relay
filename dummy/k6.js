@@ -39,5 +39,5 @@ export default () => {
 
   client.close();
 
-  sleep(0.4);
+  sleep(0.5);
 };
