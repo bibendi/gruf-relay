@@ -133,7 +133,7 @@ func defaultHealthCheck(ctx context.Context, w worker.Worker) (healthpb.HealthCh
 	}
 	defer client.Return()
 
-	healthClient := healthpb.NewHealthClient(client.Conn)
+	healthClient := healthpb.NewHealthClient(client.Conn())
 	req := &healthpb.HealthCheckRequest{}
 	resp, err := healthClient.Check(ctx, req)
 	if err != nil {

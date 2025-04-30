@@ -28,15 +28,15 @@ func TestProxy(t *testing.T) {
 
 var _ = Describe("Proxy", func() {
 	var (
-		ctrl         *gomock.Controller
-		mockBalancer *MockBalancer
-		proxy        *Proxy
-		ctx          context.Context
-		cancel       context.CancelFunc
-
+		ctrl             *gomock.Controller
+		mockBalancer     *MockBalancer
+		proxy            *Proxy
+		ctx              context.Context
+		cancel           context.CancelFunc
 		mockWorker       *worker.MockWorker
 		mockServerStream *MockServerStream
 		clientConn       *grpc.ClientConn
+		pulledClient     *MockPulledClientConn
 		lis              *bufconn.Listener
 	)
 
@@ -72,6 +72,9 @@ var _ = Describe("Proxy", func() {
 		conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(dial), grpc.WithInsecure())
 		Expect(err).To(BeNil())
 		clientConn = conn
+		pulledClient = NewMockPulledClientConn(ctrl)
+		pulledClient.EXPECT().Conn().Return(clientConn).AnyTimes()
+		pulledClient.EXPECT().Return().AnyTimes()
 
 		md := metadata.Pairs("key", "value")
 		newCtx := metadata.NewIncomingContext(ctx, md)
@@ -104,7 +107,7 @@ var _ = Describe("Proxy", func() {
 	Describe("HandleRequest", func() {
 		It("should handle the request", func() {
 			mockBalancer.EXPECT().Next().Return(mockWorker).Times(1)
-			mockWorker.EXPECT().GetClient().Return(clientConn, nil).Times(1)
+			mockWorker.EXPECT().FetchClientConn(gomock.Any()).Return(pulledClient, nil).Times(1)
 			mockServerStream.EXPECT().RecvMsg(gomock.Any()).Return(io.EOF).Times(1)
 			mockServerStream.EXPECT().SetTrailer(gomock.Any()).Times(1)
 
@@ -121,7 +124,7 @@ var _ = Describe("Proxy", func() {
 
 		It("Return error when can't get client", func() {
 			mockBalancer.EXPECT().Next().Return(mockWorker).Times(1)
-			mockWorker.EXPECT().GetClient().Return(nil, errors.New("Test error")).Times(1)
+			mockWorker.EXPECT().FetchClientConn(gomock.Any()).Return(nil, errors.New("Test error")).Times(1)
 
 			err := proxy.HandleRequest(nil, mockServerStream)
 

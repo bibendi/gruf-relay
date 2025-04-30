@@ -29,6 +29,11 @@ type Balancer interface {
 	Next() worker.Worker
 }
 
+type PulledClientConn interface {
+	Conn() *grpc.ClientConn
+	Return()
+}
+
 type Proxy struct {
 	Balancer       Balancer
 	requestTimeout time.Duration
@@ -56,7 +61,9 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 		return status.Error(codes.Unavailable, "server unavailable")
 	}
 
-	client, err := worker.FetchClientConn(ctx)
+	var client PulledClientConn
+	var err error
+	client, err = worker.FetchClientConn(ctx)
 	if err != nil {
 		return status.Errorf(codes.Unavailable, "failed getting grpc client connection: %v", err)
 	}
@@ -71,7 +78,7 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 	downstreamCtx, downstreamCancel := context.WithCancel(outCtx)
 	defer downstreamCancel()
 
-	downstream, err := grpc.NewClientStream(downstreamCtx, downstreamDescForProxying, client.Conn, fullMethod)
+	downstream, err := grpc.NewClientStream(downstreamCtx, downstreamDescForProxying, client.Conn(), fullMethod)
 	if err != nil {
 		return status.Errorf(codes.Unavailable, "failed creating downstream: %v", err)
 	}

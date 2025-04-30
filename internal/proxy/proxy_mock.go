@@ -14,6 +14,7 @@ import (
 
 	worker "github.com/bibendi/gruf-relay/internal/worker"
 	gomock "go.uber.org/mock/gomock"
+	grpc "google.golang.org/grpc"
 )
 
 // MockBalancer is a mock of Balancer interface.
@@ -52,4 +53,54 @@ func (m *MockBalancer) Next() worker.Worker {
 func (mr *MockBalancerMockRecorder) Next() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Next", reflect.TypeOf((*MockBalancer)(nil).Next))
+}
+
+// MockPulledClientConn is a mock of PulledClientConn interface.
+type MockPulledClientConn struct {
+	ctrl     *gomock.Controller
+	recorder *MockPulledClientConnMockRecorder
+	isgomock struct{}
+}
+
+// MockPulledClientConnMockRecorder is the mock recorder for MockPulledClientConn.
+type MockPulledClientConnMockRecorder struct {
+	mock *MockPulledClientConn
+}
+
+// NewMockPulledClientConn creates a new mock instance.
+func NewMockPulledClientConn(ctrl *gomock.Controller) *MockPulledClientConn {
+	mock := &MockPulledClientConn{ctrl: ctrl}
+	mock.recorder = &MockPulledClientConnMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPulledClientConn) EXPECT() *MockPulledClientConnMockRecorder {
+	return m.recorder
+}
+
+// Conn mocks base method.
+func (m *MockPulledClientConn) Conn() *grpc.ClientConn {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Conn")
+	ret0, _ := ret[0].(*grpc.ClientConn)
+	return ret0
+}
+
+// Conn indicates an expected call of Conn.
+func (mr *MockPulledClientConnMockRecorder) Conn() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Conn", reflect.TypeOf((*MockPulledClientConn)(nil).Conn))
+}
+
+// Return mocks base method.
+func (m *MockPulledClientConn) Return() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Return")
+}
+
+// Return indicates an expected call of Return.
+func (mr *MockPulledClientConnMockRecorder) Return() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Return", reflect.TypeOf((*MockPulledClientConn)(nil).Return))
 }

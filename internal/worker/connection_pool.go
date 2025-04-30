@@ -10,6 +10,11 @@ import (
 	"google.golang.org/grpc"
 )
 
+type PulledClientConn interface {
+	Conn() *grpc.ClientConn
+	Return()
+}
+
 type clientConnBuilder func() (*grpc.ClientConn, error)
 
 type connectionPool struct {
@@ -21,7 +26,7 @@ type connectionPool struct {
 }
 
 type pooledClientConn struct {
-	Conn  *grpc.ClientConn
+	conn  *grpc.ClientConn
 	pool  *connectionPool
 	index int
 	log   log.Logger
@@ -85,11 +90,15 @@ func (cp *connectionPool) close() {
 
 func newPooledClientConn(idx int, cp *connectionPool) *pooledClientConn {
 	return &pooledClientConn{
-		Conn:  cp.connections[idx],
+		conn:  cp.connections[idx],
 		pool:  cp,
 		index: idx,
 		log:   cp.log,
 	}
+}
+
+func (pcc *pooledClientConn) Conn() *grpc.ClientConn {
+	return pcc.conn
 }
 
 func (pcc *pooledClientConn) Return() {

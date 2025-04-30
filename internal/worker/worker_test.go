@@ -32,7 +32,7 @@ var _ = Describe("Worker", func() {
 
 	Describe("NewWorker", func() {
 		It("should create a new worker instance", func() {
-			w := NewWorker("worker-1", 50051, 9090, "/metrics")
+			w := NewWorker("worker-1", 50051, 9090, "/metrics", 2)
 			Expect(w).NotTo(BeNil())
 			Expect(w.String()).To(Equal("worker-1"))
 			Expect(w.Addr()).To(Equal(fmt.Sprintf("0.0.0.0:%d", 50051)))
@@ -58,7 +58,7 @@ var _ = Describe("Worker", func() {
 			mockExecutor.EXPECT().NewCommand(gomock.Any(), gomock.Any()).Return(mockCommand).AnyTimes()
 			mockCommand.EXPECT().SetEnv(gomock.Any()).AnyTimes()
 
-			worker = NewWorker("worker-1", 50051, 9090, "/metrics", withExecutor)
+			worker = NewWorker("worker-1", 50051, 9090, "/metrics", 2, withExecutor)
 
 			DeferCleanup(func() {
 				cancel()

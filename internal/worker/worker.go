@@ -21,7 +21,7 @@ type Worker interface {
 	String() string
 	Addr() string
 	MetricsAddr() string
-	FetchClientConn(ctx context.Context) (*pooledClientConn, error)
+	FetchClientConn(ctx context.Context) (PulledClientConn, error)
 }
 
 type workerImpl struct {
@@ -143,7 +143,7 @@ func (w *workerImpl) IsRunning() bool {
 	return w.running
 }
 
-func (w *workerImpl) FetchClientConn(ctx context.Context) (*pooledClientConn, error) {
+func (w *workerImpl) FetchClientConn(ctx context.Context) (PulledClientConn, error) {
 	w.log.Debug("Waiting for available connection")
 	// TODO: add ability to configure timeout
 	fetchCtx, fetchCancel := context.WithTimeout(ctx, 5*time.Second)

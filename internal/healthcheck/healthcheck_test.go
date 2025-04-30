@@ -91,14 +91,14 @@ var _ = Describe("HealthCheck", func() {
 		It("updates state to ready when worker is healthy", func() {
 			workerA.EXPECT().IsRunning().Return(true)
 			lb.EXPECT().AddWorker(workerA)
-			checker.checkAll()
+			checker.checkAll(context.Background())
 			Expect(checker.GetServerState(workerA.String())).To(Equal(connectivity.Ready))
 		})
 
 		It("updates state to shoutdown when worker is not running", func() {
 			workerA.EXPECT().IsRunning().Return(false)
 			lb.EXPECT().RemoveWorker(workerA)
-			checker.checkAll()
+			checker.checkAll(context.Background())
 			Expect(checker.GetServerState(workerA.String())).To(Equal(connectivity.Shutdown))
 		})
 
@@ -113,7 +113,7 @@ var _ = Describe("HealthCheck", func() {
 				workerA.EXPECT().IsRunning().Return(true)
 				lb.EXPECT().RemoveWorker(workerA)
 
-				checker.checkAll()
+				checker.checkAll(context.Background())
 				Expect(checker.GetServerState(workerA.String()).String()).To(Equal(connectivity.TransientFailure.String()))
 			})
 		})

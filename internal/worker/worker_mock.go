@@ -55,10 +55,10 @@ func (mr *MockWorkerMockRecorder) Addr() *gomock.Call {
 }
 
 // FetchClientConn mocks base method.
-func (m *MockWorker) FetchClientConn(ctx context.Context) (*pooledClientConn, error) {
+func (m *MockWorker) FetchClientConn(ctx context.Context) (PulledClientConn, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FetchClientConn", ctx)
-	ret0, _ := ret[0].(*pooledClientConn)
+	ret0, _ := ret[0].(PulledClientConn)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
