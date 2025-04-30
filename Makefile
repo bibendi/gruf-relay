@@ -22,6 +22,10 @@ build:
 		-o $(BUILD_DIR)/$(APP_NAME) \
 		./cmd/gruf-relay
 
+.PHONY: run
+run:
+	cd example && ../build/gruf-relay
+
 .PHONY: build-gems
 build-gems: $(PLATFORMS:%=build-gem-%)
 
