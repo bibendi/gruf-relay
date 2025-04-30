@@ -2,7 +2,7 @@ APP_NAME=gruf-relay
 BUILD_DIR=build
 GEM_DIR=gem
 
-VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "0.1.0-dev")
+VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.1.0-dev")
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 GEM_VERSION ?= $(VERSION)
