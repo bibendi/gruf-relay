@@ -1,16 +1,19 @@
 # Gruf Relay - gRPC Proxy Server
 
-Gruf Relay is a high-performance gRPC proxy server designed to optimize resource utilization in microservices environments, especially those leveraging single-core languages like Ruby. By load balancing gRPC requests across multiple backend pods, Gruf Relay allows you to effectively scale your applications within Kubernetes, maximizing CPU usage and reducing resource overhead compared to simply increasing pod counts. It features built-in load balancing and health checking capabilities to ensure optimal availability.
+Gruf Relay is a lean and performant gRPC proxy server crafted to optimize resource usage within microservice architectures, especially those leveraging single-threaded languages like Ruby. In Kubernetes deployments, a common pattern involves sidecar containers, which inevitably consume resources alongside your primary application. By deploying Gruf Relay within a pod, you unlock the ability to run multiple Ruby workers (hosting your Gruf application) as sub-processes within a single container. Gruf Relay then intelligently load balances gRPC requests across these workers, maximizing CPU utilization within the pod, without the overhead of additional sidecars or pod scaling.
+
+Key features include built-in load balancing, which ensures requests are evenly distributed across available workers, and robust health checks that contribute to high availability. Kubernetes-native readiness and liveness probes are present for seamless integration with orchestration platforms. Comprehensive metrics provide detailed insights into performance and resource consumption. A built-in request queue is also present, preventing request drops during bursts of traffic, enhancing overall system reliability. Ultimately, Gruf Relay amplifies pod capacity by enabling multiple Ruby instances to coexist within a single pod, sharing sidecars and substantially reducing overall resource demand.
 
 ## Features
 
-- **🔄 Random Load Balancing**: Distribute requests across healthy backend instances
-- **🏥 Health Checking**: Regular gRPC health checks with configurable intervals
-- **⚙️ Dynamic Configuration**: YAML config + environment variables support
-- **📊 Metrics Exposure**: Prometheus metrics endpoint for monitoring
-- **🔌 Worker Management**: Automated worker lifecycle management
-- **📈 Horizontal Scaling**: Easily scale backend worker instances
-- **📝 Structured Logging**: JSON-formatted logs with configurable levels
+- **🔄 Random Load Balancing**: Distribute requests across healthy backend instances.
+- **🏥 Health Checking**: Regular gRPC health checks with configurable intervals.
+- **⚙️ Dynamic Configuration**: YAML config + environment variables support.
+- **📊 Metrics Exposure**: Prometheus metrics endpoint for monitoring.
+- **🔌 Worker Management**: Automated worker lifecycle management.
+- **📈 Horizontal Scaling**: Easily scale backend worker instances.
+- **📝 Structured Logging**: JSON-formatted logs with configurable levels.
+- **✅ Request Handling**: Includes request queuing to help prevent request loss, offering enhanced reliability compared to a basic Gruf setup.
 
 ## Installation
 
@@ -41,10 +44,12 @@ log:
 server:
 host: "0.0.0.0"
 port: 8080
+  proxy_timeout: "5s"
 workers:
   count: 2
   start_port: 9000
   metrics_path: "/metrics"
+  pool_size: 5
 health_check:
   interval: "5s"
   timeout: "3s"
@@ -66,11 +71,13 @@ The following environment variables can be used to override settings in the `con
 *   `LOG_FORMAT`: Logging format (default: `json`). Possible values: `json`, `text`.
 *   `SERVER_HOST`: Host address for the gRPC proxy (default: `0.0.0.0`).
 *   `SERVER_PORT`: Port for the gRPC proxy (default: `8080`).
+*   `SERVER_PROXY_TIMEOUT`: Timeout for proxy requests (default: `5s`). Must be a valid duration string (e.g., "10s", "1m", "1m30s").
 *   `HEALTH_CHECK_INTERVAL`: Interval for health checks (default: `5s`).  Must be a valid duration string (e.g., "10s", "1m", "1m30s").
 *   `HEALTH_CHECK_TIMEOUT`: Timeout for health checks (default: `3s`).  Must be a valid duration string (e.g., "10s", "1m", "1m30s").
 *   `WORKERS_COUNT`: Number of backend workers (default: `2`).
 *   `WORKERS_START_PORT`: Starting port for workers (default: `9000`).
 *   `WORKERS_METRICS_PATH`: Path for worker metrics endpoint (default: `/metrics`).
+*   `WORKERS_POOL_SIZE`: Size of the worker pool (default: `5`).
 *   `PROBES_ENABLED`: Enable/disable liveness/readiness probes (default: `true`).
 *   `PROBES_PORT`: Port for liveness/readiness probes (default: `5555`).
 *   `METRICS_ENABLED`: Enable/disable metrics exposure (default: `true`).
