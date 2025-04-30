@@ -15,6 +15,66 @@ Key features include built-in load balancing, which ensures requests are evenly 
 - **📝 Structured Logging**: JSON-formatted logs with configurable levels.
 - **✅ Request Handling**: Includes request queuing to help prevent request loss, offering enhanced reliability compared to a basic Gruf setup.
 
+## Benchmarks
+
+To ensure **Gruf Relay** provides exceptional performance and stability, a series of load tests were conducted using the [k6](https://k6.io/) tool. Below are the results of comparison benchmarks between **Gruf Relay**, **Gruf**, and **Gruf with Backlog Patch**, each executed under identical conditions.
+
+### Test Parameters
+
+- **System Configuration**: MacOS 15.4.1, Apple M1 Pro CPU
+- **CPU and RAM Limits**:
+  - CPU Limit: 500m for Gruf (default & backlog patch), 1500m for Gruf Relay.
+  - Memory Limit: 400Mi for Gruf (default & backlog patch), 1200Mi for Gruf Relay.
+- **Testing Tool**: k6
+- **Scenario**:
+  - Ramp up to 60 users over 3 stages.
+  - Max 60 Virtual Users (VUs) during 1m50s run duration.
+  - Graceful cooldown and stop of 30 seconds each.
+  - Script: `k6.js`.
+  - **RPC Method Simulation**: The benchmark simulates realistic workloads by calling an RPC method that includes both I/O bound operations and CPU-bound operations. This approach ensures a more accurate representation of real-world server load.
+
+
+### Summary of Results
+
+| Test                        | Total Requests | Success Rate | Error Rate | Avg Iteration Duration | p95 Latency   |
+|-----------------------------|----------------|-------------:|-----------:|-----------------------:|---------------|
+| **Gruf Relay**              | **6500**       | **100%**     | **0%**     | **576.32ms**           | **80.33ms**   |
+| **Gruf**                    | 6547           | 98.09%       | 1.90%      | 572.50ms               | 77.04ms       |
+| **Gruf with Backlog Patch** | 6518           | 100%         | 0%         | 574.89ms               | 78.41ms       |
+
+### Test Insights
+
+1. **Gruf Relay**
+   - Achieved a perfect **100% success rate** with zero errors during load testing.
+   - Demonstrated consistent and predictable performance under high concurrency.
+   - Reliable queuing and distribution mechanisms ensure no dropped requests.
+   - ![Gruf Relay Benchmark](media/gruf-relay.png)
+
+2. **Gruf (Default)**
+   - Faced **1.90% error rate**, suggesting instability under concurrent traffic.
+   - Lack of request queuing caused dropped requests under high concurrency.
+   - Slightly faster average iteration duration compared to Gruf Relay, but with lower reliability.
+   - ![Gruf Benchmark](media/gruf.png)
+
+3. **Gruf with Backlog Patch**
+   - Successfully matched **Gruf Relay's 100% success rate** by mitigating dropped requests via custom request queuing.
+   - Introduced operational complexity due to the backlog patch, which requires compatibility checks for every minor version update of the `grpc` gem.
+   - Slight increase in latency (~2ms) likely due to additional queuing logic.
+   - ![Gruf with Backlog Patch Benchmark](media/gruf-with-patch.png)
+
+### Conclusion
+
+**Gruf Relay** performed well in this benchmark, demonstrating:
+- **Zero errors** and **100% success rate**.
+- Stable latency.
+- Built-in queuing, eliminating the need for custom patches.
+
+**Gruf with Backlog Patch** achieved comparable success, but adds operational complexity. **Gruf (Default)** exhibited errors under load due to insufficient request handling.
+
+### Notes on the Stand
+
+The benchmarks were performed on an Apple M1 Pro processor to simulate a realistic environment, with CPU and RAM limitations reflecting common Kubernetes deployment standards. Results may vary based on specific hardware and configurations.
+
 ## Installation
 
 ### Quick Install
