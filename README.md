@@ -136,12 +136,12 @@ curl -v http://localhost:5555/liveness
 
 #### Triggering a Job
 ```bash
-dummy/script/job
+example/script/job
 ```
 
 #### Checking Health
 ```bash
-dummy/script/health_check
+example/script/health_check
 ```
 
 ## Contributing

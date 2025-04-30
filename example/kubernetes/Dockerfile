@@ -26,7 +26,7 @@ WORKDIR ${APP_PATH}
 COPY ./gem /gem
 
 # Install application gems
-COPY ./dummy/Gemfile ./dummy/Gemfile.lock ./
+COPY ./example/Gemfile ./example/Gemfile.lock ./
 RUN bundle install && \
     rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git
 
@@ -49,7 +49,7 @@ RUN if [ "$(uname -m)" = "x86_64" ]; then \
     echo "Unknown architecture: $(uname -m), skipping LD_PRELOAD"; \
   fi
 
-COPY ./dummy ${APP_PATH}
+COPY ./example ${APP_PATH}
 
 EXPOSE 8080
 
