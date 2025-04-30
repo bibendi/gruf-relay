@@ -55,10 +55,12 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 	if worker == nil {
 		return status.Error(codes.Unavailable, "server unavailable")
 	}
-	client, err := worker.GetClient()
+
+	client, err := worker.FetchClientConn(ctx)
 	if err != nil {
-		return status.Errorf(codes.Unavailable, "failed getting grpc client: %v", err)
+		return status.Errorf(codes.Unavailable, "failed getting grpc client connection: %v", err)
 	}
+	defer client.Return()
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, p.requestTimeout)
 	defer cancel()
@@ -69,7 +71,7 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 	downstreamCtx, downstreamCancel := context.WithCancel(outCtx)
 	defer downstreamCancel()
 
-	downstream, err := grpc.NewClientStream(downstreamCtx, downstreamDescForProxying, client, fullMethod)
+	downstream, err := grpc.NewClientStream(downstreamCtx, downstreamDescForProxying, client.Conn, fullMethod)
 	if err != nil {
 		return status.Errorf(codes.Unavailable, "failed creating downstream: %v", err)
 	}

@@ -55,7 +55,7 @@ func (c *Checker) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			c.checkAll()
+			c.checkAll(ctx)
 		case <-ctx.Done():
 			log.Info("Stopping health checker")
 			return
@@ -73,13 +73,13 @@ func (c *Checker) GetServerState(name string) connectivity.State {
 	return state
 }
 
-func (c *Checker) checkAll() {
+func (c *Checker) checkAll(ctx context.Context) {
 	var wg sync.WaitGroup
 	for _, w := range c.workers {
 		wg.Add(1)
 		go func(w worker.Worker) {
 			defer wg.Done()
-			state := c.checkWorker(w)
+			state := c.checkWorker(ctx, w)
 			c.updateWorkerState(w.String(), state)
 		}(w)
 	}
@@ -87,16 +87,16 @@ func (c *Checker) checkAll() {
 	wg.Wait()
 }
 
-func (c *Checker) checkWorker(w worker.Worker) connectivity.State {
+func (c *Checker) checkWorker(ctx context.Context, w worker.Worker) connectivity.State {
 	if !w.IsRunning() {
 		c.lb.RemoveWorker(w)
 		log.Error("Worker is not running", slog.Any("worker", w), slog.Any("state", connectivity.Shutdown))
 		return connectivity.Shutdown
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	checkCtx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
-	status, err := c.healthCheckFn(ctx, w)
+	status, err := c.healthCheckFn(checkCtx, w)
 	if err != nil {
 		c.lb.RemoveWorker(w)
 		log.Error("Health check failed", slog.Any("worker", w), slog.Any("error", err), slog.Any("state", connectivity.TransientFailure))
@@ -127,12 +127,13 @@ func (c *Checker) updateWorkerState(name string, state connectivity.State) {
 }
 
 func defaultHealthCheck(ctx context.Context, w worker.Worker) (healthpb.HealthCheckResponse_ServingStatus, error) {
-	grpcClient, err := w.GetClient()
+	client, err := w.FetchClientConn(ctx)
 	if err != nil {
 		return healthpb.HealthCheckResponse_UNKNOWN, err
 	}
+	defer client.Return()
 
-	healthClient := healthpb.NewHealthClient(grpcClient)
+	healthClient := healthpb.NewHealthClient(client.Conn)
 	req := &healthpb.HealthCheckRequest{}
 	resp, err := healthClient.Check(ctx, req)
 	if err != nil {

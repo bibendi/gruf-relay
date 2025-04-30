@@ -51,18 +51,19 @@ type Log struct {
 type Server struct {
 	Host         string        `yaml:"host" env:"SERVER_HOST" env-default:"0.0.0.0"`
 	Port         int           `yaml:"port" env:"SERVER_PORT" env-default:"8080"`
-	ProxyTimeout time.Duration `yaml:"proxy_timeout" env:"SERVER_PROXY_TIMEOUT" env-default:"2s"`
+	ProxyTimeout time.Duration `yaml:"proxy_timeout" env:"SERVER_PROXY_TIMEOUT" env-default:"5s"`
 }
 
 type Workers struct {
 	Count       int    `yaml:"count" env:"WORKERS_COUNT" env-default:"2"`
 	StartPort   int    `yaml:"start_port" env:"WORKERS_START_PORT" env-default:"9000"`
 	MetricsPath string `yaml:"metrics_path" env:"WORKERS_METRICS_PATH" env-default:"/metrics"`
+	PoolSize    int    `yaml:"pool_size" env:"WORKERS_POOL_SIZE" env-default:"5"`
 }
 
 type HealthCheck struct {
 	Interval time.Duration `yaml:"interval" env:"HEALTH_CHECK_INTERVAL" env-default:"5s"`
-	Timeout  time.Duration `yaml:"timeout" env:"HEALTH_CHECK_TIMEOUT" env-default:"3s"`
+	Timeout  time.Duration `yaml:"timeout" env:"HEALTH_CHECK_TIMEOUT" env-default:"5s"`
 }
 
 type Probes struct {

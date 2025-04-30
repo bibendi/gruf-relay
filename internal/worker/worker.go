@@ -21,16 +21,18 @@ type Worker interface {
 	String() string
 	Addr() string
 	MetricsAddr() string
-	GetClient() (*grpc.ClientConn, error)
+	FetchClientConn(ctx context.Context) (*pooledClientConn, error)
 }
 
 type workerImpl struct {
 	Name        string
+	addr        string
 	port        int
 	metricsPort int
 	metricsPath string
+	poolSize    int
 	log         log.Logger
-	client      *grpc.ClientConn
+	connPool    *connectionPool
 	cmd         Command
 	mu          sync.Mutex
 	running     bool
@@ -47,15 +49,25 @@ func WithExecutor(executor CommandExecutor) Option {
 	}
 }
 
-func NewWorker(name string, port, metricsPort int, metricsPath string, opts ...Option) *workerImpl {
+func NewWorker(name string, port, metricsPort int, metricsPath string, poolSize int, opts ...Option) *workerImpl {
 	logger := log.With(slog.String("worker", name))
+	addr := fmt.Sprintf("0.0.0.0:%d", port)
+
 	w := &workerImpl{
 		Name:        name,
+		addr:        addr,
 		port:        port,
 		metricsPort: metricsPort,
 		metricsPath: metricsPath,
+		poolSize:    poolSize,
 		cmdDoneChan: make(chan error, 1),
 		log:         logger,
+		connPool: newConnectionPool(poolSize, logger, func() (*grpc.ClientConn, error) {
+			return grpc.NewClient(
+				addr,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithCodec(codec.Codec()))
+		}),
 	}
 
 	for _, opt := range opts {
@@ -74,7 +86,7 @@ func (w *workerImpl) String() string {
 }
 
 func (w *workerImpl) Addr() string {
-	return fmt.Sprintf("0.0.0.0:%d", w.port)
+	return w.addr
 }
 
 func (w *workerImpl) MetricsAddr() string {
@@ -110,7 +122,7 @@ func (w *workerImpl) start() error {
 
 	w.log.Info("Starting worker")
 
-	w.client = nil
+	w.connPool.close()
 
 	w.buildCmd()
 	if err := w.cmd.Start(); err != nil {
@@ -131,22 +143,17 @@ func (w *workerImpl) IsRunning() bool {
 	return w.running
 }
 
-func (w *workerImpl) GetClient() (*grpc.ClientConn, error) {
-	if w.client == nil {
-		w.mu.Lock()
-		defer w.mu.Unlock()
-		if w.client == nil {
-			client, err := grpc.NewClient(
-				w.Addr(),
-				grpc.WithTransportCredentials(insecure.NewCredentials()),
-				grpc.WithCodec(codec.Codec()))
-			if err != nil {
-				return nil, fmt.Errorf("failed creating new client for worker %s: %v", w, err)
-			}
-			w.client = client
-		}
+func (w *workerImpl) FetchClientConn(ctx context.Context) (*pooledClientConn, error) {
+	w.log.Debug("Waiting for available connection")
+	// TODO: add ability to configure timeout
+	fetchCtx, fetchCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer fetchCancel()
+
+	conn, err := w.connPool.fetchConn(fetchCtx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch gRPC client connection: %v", err)
 	}
-	return w.client, nil
+	return conn, nil
 }
 
 func (w *workerImpl) shutdown() error {
@@ -156,13 +163,7 @@ func (w *workerImpl) shutdown() error {
 	w.log.Info("Stopping worker")
 	w.stopping = true
 
-	if w.client != nil {
-		w.log.Info("Closing client connection")
-		if err := w.client.Close(); err != nil {
-			w.log.Error("Failed to close client connection", slog.Any("error", err))
-		}
-	}
-	w.client = nil
+	w.connPool.close()
 
 	if !w.running {
 		w.log.Warn("Worker is not running, no need to shutdown")
@@ -233,6 +234,7 @@ func (w *workerImpl) buildCmd() {
 	cmdEnv := os.Environ()
 	cmdEnv = append(cmdEnv, fmt.Sprintf("PROMETHEUS_EXPORTER_PORT=%d", w.metricsPort))
 	cmdEnv = append(cmdEnv, fmt.Sprintf("PROMETHEUS_EXPORTER_PATH=%s", w.metricsPath))
+	cmdEnv = append(cmdEnv, fmt.Sprintf("RAILS_MAX_THREADS=%d", w.poolSize))
 	w.cmd.SetEnv(cmdEnv)
 	w.log.Debug("Command built", "command", args)
 }

@@ -6,7 +6,7 @@ workers:
   start_port: 9000
   metrics_path: /metrics
 log:
-  level: debug
+  level: info
   format: pretty
 health_check:
   interval: 5s

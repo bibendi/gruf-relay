@@ -23,8 +23,9 @@ const client = new grpc.Client();
 client.load([protoFileDir], protoFileName);
 
 export default () => {
-  client.connect('k8s.orb.local:8080', {
-    plaintext: true
+  client.connect('0.0.0.0:8080', {
+    plaintext: true,
+    timeout: 10000
   });
 
   const requestData = {

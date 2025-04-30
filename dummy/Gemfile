@@ -6,12 +6,15 @@ gem "rails", "~> 8.0.1"
 gem "propshaft"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
+# Use Semantic Logger for structured logs
+gem "rails_semantic_logger"
 
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 gem "tzinfo-data", platforms: %i[ windows jruby ]
 
 # gRPC server
 gem "gruf"
+gem "grpc", "= 1.71.0" # pin the version to make sure backlog patch works
 gem "gruf-relay", path: "../gem"
 
 # Metrics

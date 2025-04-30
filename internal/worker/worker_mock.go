@@ -14,7 +14,6 @@ import (
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
-	grpc "google.golang.org/grpc"
 )
 
 // MockWorker is a mock of Worker interface.
@@ -55,19 +54,19 @@ func (mr *MockWorkerMockRecorder) Addr() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Addr", reflect.TypeOf((*MockWorker)(nil).Addr))
 }
 
-// GetClient mocks base method.
-func (m *MockWorker) GetClient() (*grpc.ClientConn, error) {
+// FetchClientConn mocks base method.
+func (m *MockWorker) FetchClientConn(ctx context.Context) (*pooledClientConn, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetClient")
-	ret0, _ := ret[0].(*grpc.ClientConn)
+	ret := m.ctrl.Call(m, "FetchClientConn", ctx)
+	ret0, _ := ret[0].(*pooledClientConn)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetClient indicates an expected call of GetClient.
-func (mr *MockWorkerMockRecorder) GetClient() *gomock.Call {
+// FetchClientConn indicates an expected call of FetchClientConn.
+func (mr *MockWorkerMockRecorder) FetchClientConn(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClient", reflect.TypeOf((*MockWorker)(nil).GetClient))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchClientConn", reflect.TypeOf((*MockWorker)(nil).FetchClientConn), ctx)
 }
 
 // IsRunning mocks base method.

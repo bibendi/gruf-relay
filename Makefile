@@ -98,19 +98,31 @@ run-docker:
 		-it --rm \
 		--name $(APP_NAME) $(APP_NAME):$(VERSION) $(cmd)
 
-.PHONY: k8s-apply
-k8s-apply:
-	VERSION=$(VERSION) envsubst < dummy/kubernetes/deployment.yaml | kubectl apply -f -
-	VERSION=$(VERSION) envsubst < dummy/kubernetes/service.yaml | kubectl apply -f -
+.PHONY: k8s-apply-gruf-relay
+k8s-apply-gruf-relay:
+	VERSION=$(VERSION) envsubst < dummy/kubernetes/gruf-relay-deployment.yaml | kubectl apply -f -
+	VERSION=$(VERSION) envsubst < dummy/kubernetes/gruf-relay-service.yaml | kubectl apply -f -
+
+.PHONY: k8s-apply-gruf
+k8s-apply-gruf:
+	VERSION=$(VERSION) GRUF_BACKLOG_PATCH= envsubst < dummy/kubernetes/gruf-deployment.yaml | kubectl apply -f -
+	VERSION=$(VERSION) envsubst < dummy/kubernetes/gruf-service.yaml | kubectl apply -f -
+
+.PHONY: k8s-apply-gruf-with-patch
+k8s-apply-gruf-with-patch:
+	VERSION=$(VERSION) GRUF_BACKLOG_PATCH=true envsubst < dummy/kubernetes/gruf-deployment.yaml | kubectl apply -f -
+	VERSION=$(VERSION) envsubst < dummy/kubernetes/gruf-service.yaml | kubectl apply -f -
 
 .PHONY: k8s-delete
 k8s-delete:
-	VERSION=$(VERSION) envsubst < dummy/kubernetes/service.yaml | kubectl delete -f -
-	VERSION=$(VERSION) envsubst < dummy/kubernetes/deployment.yaml | kubectl delete -f -
+	VERSION=$(VERSION) envsubst < dummy/kubernetes/gruf-relay-service.yaml | kubectl delete --ignore-not-found -f -
+	VERSION=$(VERSION) envsubst < dummy/kubernetes/gruf-relay-deployment.yaml | kubectl delete --ignore-not-found -f -
+	VERSION=$(VERSION) envsubst < dummy/kubernetes/gruf-service.yaml | kubectl delete --ignore-not-found -f -
+	VERSION=$(VERSION) envsubst < dummy/kubernetes/gruf-deployment.yaml | kubectl delete --ignore-not-found -f -
 
 .PHONY: k6-run
 k6-run:
-	cd dummy && k6 run k6.js
+	cd dummy && k6 run --log-output none k6.js
 
 .PHONY: clean
 clean:

@@ -22,7 +22,7 @@ func NewManager(cfg config.Workers) *Manager {
 		name := fmt.Sprintf("worker-%d", i+1)
 		port := cfg.StartPort + i
 		metricsPort := port + 100
-		workers[name] = worker.NewWorker(name, port, metricsPort, cfg.MetricsPath)
+		workers[name] = worker.NewWorker(name, port, metricsPort, cfg.MetricsPath, cfg.PoolSize)
 	}
 
 	return &Manager{

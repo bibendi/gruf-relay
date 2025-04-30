@@ -3,42 +3,41 @@ kind: Deployment
 metadata:
   name: gruf-relay
 spec:
-  # replicas: 4
-  replicas: 2
+  replicas: 6
   selector:
     matchLabels:
-      app: gruf-relay
+      app: gruf
   template:
     metadata:
       labels:
-        app: gruf-relay
+        app: gruf
     spec:
       containers:
-      - name: gruf-relay
+      - name: gruf
         image: gruf-relay:${VERSION}
-        command: ["bundle", "exec", "gruf-relay"]
-        # command: ["bundle", "exec", "gruf"]
+        command: ["bundle", "exec", "gruf"]
         env:
         - name: PROMETHEUS_EXPORTER_PORT
           value: "9394"
         - name: PROMETHEUS_EXPORTER_PATH
           value: /metrics
         - name: RAILS_LOG_LEVEL
-          value: debug
-        - name: LOG_LEVEL
-          value: error
+          value: warn
+        - name: RAILS_MAX_THREADS
+          value: "5"
+        - name: GRUF_BACKLOG_PATCH
+          value: "${GRUF_BACKLOG_PATCH}"
         ports:
         - containerPort: 8080
         - containerPort: 5555
         - containerPort: 9394
         resources:
           requests:
-            cpu: "100m"
+            cpu: "250m"
             memory: "200Mi"
           limits:
-            # cpu: "500m"
-            cpu: "1100m"
-            memory: "800Mi"
+            cpu: "500m"
+            memory: "400Mi"
         # startupProbe:
         #   httpGet:
         #     path: /startup

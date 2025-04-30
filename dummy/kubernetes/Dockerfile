@@ -20,11 +20,10 @@ RUN apt-get update -qq && \
     libjemalloc2 && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
-# Copy gruf-relay gem
-RUN mkdir /gem
-COPY ./gem /gem
-
 WORKDIR ${APP_PATH}
+
+# Copy gruf-relay gem
+COPY ./gem /gem
 
 # Install application gems
 COPY ./dummy/Gemfile ./dummy/Gemfile.lock ./
