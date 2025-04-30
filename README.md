@@ -88,6 +88,31 @@ cd gruf-relay
 make build
 ```
 
+### Ruby Gem
+
+Gruf Relay is also available as a Ruby gem containing the pre-compiled binary for different platforms:
+
+```bash
+# Install the gem
+gem install gruf-relay
+
+# Or add to your Gemfile
+gem "gruf-relay"
+```
+
+After installation, you can run Gruf Relay using:
+
+```bash
+bundle exec gruf-relay
+```
+
+The gem packages binaries for multiple platforms including:
+
+- Linux AMD64 (x86_64)
+- Linux ARM64
+- macOS AMD64 (x86_64)
+- macOS ARM64 (Apple Silicon)
+
 ## Configuration
 
 Gruf Relay prioritizes configuration in the following order:
