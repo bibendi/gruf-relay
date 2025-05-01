@@ -4,6 +4,29 @@ Gruf Relay is a lean and performant gRPC proxy server crafted to optimize resour
 
 Key features include built-in load balancing, which ensures requests are evenly distributed across available workers, and robust health checks that contribute to high availability. Kubernetes-native readiness and liveness probes are present for seamless integration with orchestration platforms. Comprehensive metrics provide detailed insights into performance and resource consumption. A built-in request queue is also present, preventing request drops during bursts of traffic, enhancing overall system reliability. Ultimately, Gruf Relay amplifies pod capacity by enabling multiple Ruby instances to coexist within a single pod, sharing sidecars and substantially reducing overall resource demand.
 
+## Table of Contents
+
+- [Features](#features)
+- [Benchmarks](#benchmarks)
+  - [Test Parameters](#test-parameters)
+  - [Summary of Results](#summary-of-results)
+  - [Test Insights](#test-insights)
+- [Installation](#installation)
+  - [Quick Install](#quick-install)
+  - [Ruby Gem](#ruby-gem)
+- [Configuration](#configuration)
+  - [Config File (gruf-relay.yml)](#config-file-gruf-relayyyml)
+  - [Environment Variables](#environment-variables)
+- [Usage](#usage)
+  - [Endpoints](#endpoints)
+- [Architecture](#architecture)
+  - [Key Components](#key-components)
+- [Example Usage](#example-usage)
+  - [Probes](#probes)
+  - [Scripts](#scripts)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Features
 
 - **Random Load Balancing**: Distribute requests across healthy backend instances.
@@ -199,10 +222,20 @@ export HEALTH_CHECK_INTERVAL=10s
 1. **Manager**: Controls worker lifecycle
 2. **Health Checker**: Monitors worker availability
 3. **Random Balancer**: Distributes requests evenly
-4. **Metrics Server**: Exposes Prometheus metrics
-5. **Probes Server**: Provides endpoints for liveness, readiness and startup probes.
+4. **Request Queue**: Buffers incoming requests to prevent drops during high load.
+5. **Metrics Server**: Exposes Prometheus metrics
+6. **Probes Server**: Provides endpoints for liveness, readiness and startup probes.
 
 ## Example Usage
+
+To run with the example Gruf application:
+
+```bash
+# Run the Gruf Relay server with the example application
+make run
+```
+
+This command will start Gruf Relay and the example Gruf application side-by-side, allowing you to test the proxy's functionality.
 
 ### Probes
 
