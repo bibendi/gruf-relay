@@ -6,14 +6,14 @@ Key features include built-in load balancing, which ensures requests are evenly 
 
 ## Features
 
-- **🔄 Random Load Balancing**: Distribute requests across healthy backend instances.
-- **🏥 Health Checking**: Regular gRPC health checks with configurable intervals.
-- **⚙️ Dynamic Configuration**: YAML config + environment variables support.
-- **📊 Metrics Exposure**: Prometheus metrics endpoint for monitoring.
-- **🔌 Worker Management**: Automated worker lifecycle management.
-- **📈 Horizontal Scaling**: Easily scale backend worker instances.
-- **📝 Structured Logging**: JSON-formatted logs with configurable levels.
-- **✅ Request Handling**: Includes request queuing to help prevent request loss, offering enhanced reliability compared to a basic Gruf setup.
+- **Random Load Balancing**: Distribute requests across healthy backend instances.
+- **Health Checking**: Regular gRPC health checks with configurable intervals.
+- **Dynamic Configuration**: YAML config + environment variables support.
+- **Metrics Exposure**: Prometheus metrics endpoint for monitoring.
+- **Worker Management**: Automated worker lifecycle management.
+- **Horizontal Scaling**: Easily scale backend worker instances.
+- **Structured Logging**: JSON-formatted logs with configurable levels.
+- **Request Handling**: Includes request queuing to help prevent request loss, offering enhanced reliability compared to a basic Gruf setup.
 
 ## Benchmarks
 
@@ -25,6 +25,9 @@ To ensure **Gruf Relay** provides exceptional performance and stability, a serie
 - **CPU and RAM Limits**:
   - CPU Limit: 500m for Gruf (default & backlog patch), 1500m for Gruf Relay.
   - Memory Limit: 400Mi for Gruf (default & backlog patch), 1200Mi for Gruf Relay.
+- **Deployment Configuration**:
+  - Gruf & Gruf with Patch: 6 pods with 5 threads each (30 total threads)
+  - Gruf Relay: 2 pods with 3 workers per pod, each worker using 5 threads (30 total threads)
 - **Testing Tool**: k6
 - **Scenario**:
   - Ramp up to 60 users over 3 stages.
@@ -36,11 +39,11 @@ To ensure **Gruf Relay** provides exceptional performance and stability, a serie
 
 ### Summary of Results
 
-| Test                        | Total Requests | Success Rate | Error Rate | Avg Iteration Duration | p95 Latency   |
-|-----------------------------|----------------|-------------:|-----------:|-----------------------:|---------------|
-| **Gruf Relay**              | **6500**       | **100%**     | **0%**     | **576.32ms**           | **80.33ms**   |
-| **Gruf**                    | 6547           | 98.09%       | 1.90%      | 572.50ms               | 77.04ms       |
-| **Gruf with Backlog Patch** | 6518           | 100%         | 0%         | 574.89ms               | 78.41ms       |
+| Test                        | Total Requests | Success Rate | Error Rate | p95 Latency   |
+|-----------------------------|----------------|-------------:|-----------:|---------------|
+| **Gruf Relay**              | **6500**       | **100%**     | **0%**     | **80.33ms**   |
+| **Gruf**                    | 6547           | 98.09%       | 1.90%      | 77.04ms       |
+| **Gruf with Backlog Patch** | 6518           | 100%         | 0%         | 78.41ms       |
 
 ### Test Insights
 
@@ -62,18 +65,12 @@ To ensure **Gruf Relay** provides exceptional performance and stability, a serie
    - Slight increase in latency (~2ms) likely due to additional queuing logic.
    - ![Gruf with Backlog Patch Benchmark](media/gruf-with-patch.png)
 
-### Conclusion
-
 **Gruf Relay** performed well in this benchmark, demonstrating:
 - **Zero errors** and **100% success rate**.
 - Stable latency.
 - Built-in queuing, eliminating the need for custom patches.
 
 **Gruf with Backlog Patch** achieved comparable success, but adds operational complexity. **Gruf (Default)** exhibited errors under load due to insufficient request handling.
-
-### Notes on the Stand
-
-The benchmarks were performed on an Apple M1 Pro processor to simulate a realistic environment, with CPU and RAM limitations reflecting common Kubernetes deployment standards. Results may vary based on specific hardware and configurations.
 
 ## Installation
 
