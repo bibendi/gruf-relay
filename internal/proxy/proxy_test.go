@@ -88,16 +88,19 @@ var _ = Describe("Proxy", func() {
 		mockServerStream.EXPECT().Context().Return(methodCtx).AnyTimes()
 
 		DeferCleanup(func() {
-			cancel()
-
-			grpcServer.GracefulStop()
-			if lis != nil {
-				lis.Close()
-			}
 			if clientConn != nil {
 				clientConn.Close()
 			}
 
+			if grpcServer != nil {
+				grpcServer.GracefulStop()
+			}
+
+			if lis != nil {
+				lis.Close()
+			}
+
+			cancel()
 			ctrl.Finish()
 		})
 	})
