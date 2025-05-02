@@ -2,6 +2,8 @@
 
 # Gruf Relay - gRPC Proxy Server
 
+<img src="https://raw.githubusercontent.com/bibendi/gruf-relay/master/.github/gruf-relay-logo.png" alt="gruf-relay" height="240" align="right" />
+
 Gruf Relay is a lean and performant gRPC proxy server crafted to optimize resource usage within microservice architectures, especially those leveraging single-threaded languages like Ruby. In Kubernetes deployments, a common pattern involves sidecar containers, which inevitably consume resources alongside your primary application. By deploying Gruf Relay within a pod, you unlock the ability to run multiple Ruby workers (hosting your Gruf application) as sub-processes within a single container. Gruf Relay then intelligently load balances gRPC requests across these workers, maximizing CPU utilization within the pod, without the overhead of additional sidecars or pod scaling.
 
 Key features include built-in load balancing, which ensures requests are evenly distributed across available workers, and robust health checks that contribute to high availability. Kubernetes-native readiness and liveness probes are present for seamless integration with orchestration platforms. Comprehensive metrics provide detailed insights into performance and resource consumption. A built-in request queue is also present, preventing request drops during bursts of traffic, enhancing overall system reliability. Ultimately, Gruf Relay amplifies pod capacity by enabling multiple Ruby instances to coexist within a single pod, sharing sidecars and substantially reducing overall resource demand.
