@@ -160,6 +160,10 @@ k8s-delete:
 k6-run:
 	cd example && k6 run --log-output none k6.js
 
+.PHONY: lint
+lint:
+	golangci-lint run
+
 .PHONY: clean
 clean:
 	rm -rf $(BUILD_DIR)
