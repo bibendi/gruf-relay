@@ -52,7 +52,8 @@ var _ = Describe("HealthCheck", func() {
 
 	Describe("Run", func() {
 		It("runs health checking", func() {
-			ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			defer cancel()
 			workers := map[string]worker.Worker{
 				"worker-1": worker.NewMockWorker(ctrl),
 				"worker-2": worker.NewMockWorker(ctrl),

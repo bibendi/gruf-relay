@@ -156,13 +156,17 @@ func (s *Scraper) scrapeMetrics(url string) ([]*dto.MetricFamily, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch metrics from %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Error("Error closing response body", slog.Any("error", err))
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch metrics from %s, status code: %d", url, resp.StatusCode)
 	}
 
-	decoder := expfmt.NewDecoder(resp.Body, expfmt.FmtText)
+	decoder := expfmt.NewDecoder(resp.Body, expfmt.NewFormat(expfmt.TypeTextPlain))
 
 	var mfList []*dto.MetricFamily
 	for {

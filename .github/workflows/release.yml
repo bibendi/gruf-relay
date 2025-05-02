@@ -7,8 +7,9 @@ on:
 
 env:
   GO_VERSION: '1.24'
-  APP_NAME: gruf-relay
-  BUILD_DIR: build
+
+permissions:
+  contents: write
 
 jobs:
   build-and-release:
@@ -36,11 +37,12 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
-          name: Release $${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
           body: |
             ## Release Notes
 
             See CHANGELOG.md for details.
-          draft: true
+            ```
+          draft: false
           prerelease: false
           files: build/gruf-relay-*

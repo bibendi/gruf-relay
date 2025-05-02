@@ -16,6 +16,8 @@ import (
 	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
@@ -54,8 +56,9 @@ var _ = Describe("Proxy", func() {
 			return lis.Dial()
 		}
 
+		encoding.RegisterCodec(codec.Codec())
+
 		grpcServer := grpc.NewServer(
-			grpc.CustomCodec(codec.Codec()),
 			grpc.UnknownServiceHandler(func(_ interface{}, stream grpc.ServerStream) error {
 				log.Println("UnknownServiceHandler called")
 				return nil
@@ -69,7 +72,9 @@ var _ = Describe("Proxy", func() {
 			}
 		}()
 
-		conn, err := grpc.DialContext(ctx, "bufnet", grpc.WithContextDialer(dial), grpc.WithInsecure())
+		conn, err := grpc.NewClient("passthrough:///bufnet",
+			grpc.WithContextDialer(dial),
+			grpc.WithTransportCredentials(insecure.NewCredentials()))
 		Expect(err).To(BeNil())
 		clientConn = conn
 		pulledClient = NewMockPulledClientConn(ctrl)
@@ -83,16 +88,19 @@ var _ = Describe("Proxy", func() {
 		mockServerStream.EXPECT().Context().Return(methodCtx).AnyTimes()
 
 		DeferCleanup(func() {
-			cancel()
-
-			grpcServer.GracefulStop()
-			if lis != nil {
-				lis.Close()
-			}
 			if clientConn != nil {
 				clientConn.Close()
 			}
 
+			if grpcServer != nil {
+				grpcServer.GracefulStop()
+			}
+
+			if lis != nil {
+				lis.Close()
+			}
+
+			cancel()
 			ctrl.Finish()
 		})
 	})

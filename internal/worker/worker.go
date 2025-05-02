@@ -66,7 +66,7 @@ func NewWorker(name string, port, metricsPort int, metricsPath string, poolSize 
 			return grpc.NewClient(
 				addr,
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
-				grpc.WithCodec(codec.Codec()))
+				grpc.WithDefaultCallOptions(grpc.ForceCodec(codec.Codec())))
 		}),
 	}
 

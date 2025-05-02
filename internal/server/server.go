@@ -12,6 +12,7 @@ import (
 	"github.com/bibendi/gruf-relay/internal/config"
 	"github.com/bibendi/gruf-relay/internal/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/keepalive"
 )
 
@@ -42,8 +43,9 @@ func (s *Server) Serve(ctx context.Context) error {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
 
+	encoding.RegisterCodec(codec.Codec())
+
 	server := grpc.NewServer(
-		grpc.CustomCodec(codec.Codec()),
 		grpc.UnknownServiceHandler(s.proxy.HandleRequest),
 		grpc.NumStreamWorkers(0),
 		grpc.KeepaliveParams(keepalive.ServerParameters{

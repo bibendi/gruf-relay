@@ -3,44 +3,39 @@ package codec
 import (
 	"fmt"
 
-	"google.golang.org/grpc"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/protobuf/proto"
 )
 
-// Codec returns a proxying grpc.Codec with the default protobuf codec as parent.
+// Codec returns a proxying encoding.Codec with the default protobuf codec as parent.
 //
 // See CodecWithParent.
-//
-// Deprecated: No longer necessary.
-func Codec() grpc.Codec {
+func Codec() encoding.Codec {
 	return CodecWithParent(&protoCodec{})
 }
 
-// CodecWithParent returns a proxying grpc.Codec with a user provided codec as parent.
-//
-// Deprecated: No longer necessary.
-func CodecWithParent(fallback grpc.Codec) grpc.Codec {
+// CodecWithParent returns a proxying encoding.Codec with a user provided codec as parent.
+func CodecWithParent(fallback encoding.Codec) encoding.Codec {
 	return &rawCodec{fallback}
 }
 
 type rawCodec struct {
-	parentCodec grpc.Codec
+	parentCodec encoding.Codec
 }
 
 type frame struct {
 	payload []byte
 }
 
-func (c *rawCodec) Marshal(v interface{}) ([]byte, error) {
+func (c *rawCodec) Marshal(v any) ([]byte, error) {
 	out, ok := v.(*frame)
 	if !ok {
 		return c.parentCodec.Marshal(v)
 	}
 	return out.payload, nil
-
 }
 
-func (c *rawCodec) Unmarshal(data []byte, v interface{}) error {
+func (c *rawCodec) Unmarshal(data []byte, v any) error {
 	dst, ok := v.(*frame)
 	if !ok {
 		return c.parentCodec.Unmarshal(data, v)
@@ -49,21 +44,21 @@ func (c *rawCodec) Unmarshal(data []byte, v interface{}) error {
 	return nil
 }
 
-func (c *rawCodec) String() string {
-	return fmt.Sprintf("proxy>%s", c.parentCodec.String())
+func (c *rawCodec) Name() string {
+	return fmt.Sprintf("proxy>%s", c.parentCodec.Name())
 }
 
 // protoCodec is a Codec implementation with protobuf. It is the default rawCodec for gRPC.
 type protoCodec struct{}
 
-func (protoCodec) Marshal(v interface{}) ([]byte, error) {
+func (protoCodec) Marshal(v any) ([]byte, error) {
 	return proto.Marshal(v.(proto.Message))
 }
 
-func (protoCodec) Unmarshal(data []byte, v interface{}) error {
+func (protoCodec) Unmarshal(data []byte, v any) error {
 	return proto.Unmarshal(data, v.(proto.Message))
 }
 
-func (protoCodec) String() string {
+func (protoCodec) Name() string {
 	return "proto"
 }

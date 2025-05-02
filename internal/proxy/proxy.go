@@ -97,7 +97,9 @@ func (p *Proxy) HandleRequest(srv any, upstream grpc.ServerStream) error {
 			}
 
 			if err == io.EOF {
-				downstream.CloseSend()
+				if err := downstream.CloseSend(); err != nil {
+					return status.Errorf(codes.Internal, "failed closing downstream: %v", err)
+				}
 			} else {
 				return status.Errorf(codes.Internal, "failed proxying request: %v", err)
 			}

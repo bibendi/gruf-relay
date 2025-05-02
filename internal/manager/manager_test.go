@@ -48,7 +48,8 @@ var _ = Describe("Manager", func() {
 
 	Describe("Run", func() {
 		It("runs all workers correctly", func() {
-			ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			defer cancel()
 			worker1 := worker.NewMockWorker(ctrl)
 			worker2 := worker.NewMockWorker(ctrl)
 			worker1.EXPECT().Run(gomock.Any()).Return(nil)
