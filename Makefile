@@ -73,25 +73,25 @@ build-gems:
 	@echo "All gems built successfully."
 
 .PHONY: build-gem-linux-amd64
-build-gem-linux-amd64: build-binary-linux-amd64
+build-gem-linux-amd64:
 	mkdir -p $(GEM_DIR)/exe
 	cp $(BUILD_DIR)/$(APP_NAME)-linux-amd64 $(GEM_DIR)/exe/$(APP_NAME)-linux-amd64
 	cd $(GEM_DIR) && GEM_VERSION=$(GEM_VERSION) PLATFORM=x86_64-linux BINARY_NAME=$(APP_NAME)-linux-amd64 gem build -o pkg/$(APP_NAME)-$(GEM_VERSION)-linux-amd64.gem
 
 .PHONY: build-gem-linux-arm64
-build-gem-linux-arm64: build-binary-linux-arm64
+build-gem-linux-arm64:
 	mkdir -p $(GEM_DIR)/exe
 	cp $(BUILD_DIR)/$(APP_NAME)-linux-arm64 $(GEM_DIR)/exe/$(APP_NAME)-linux-arm64
 	cd $(GEM_DIR) && GEM_VERSION=$(GEM_VERSION) PLATFORM=arm64-linux BINARY_NAME=$(APP_NAME)-linux-arm64 gem build -o pkg/$(APP_NAME)-$(GEM_VERSION)-linux-arm64.gem
 
 .PHONY: build-gem-darwin-amd64
-build-gem-darwin-amd64: build-binary-darwin-amd64
+build-gem-darwin-amd64:
 	mkdir -p $(GEM_DIR)/exe
 	cp $(BUILD_DIR)/$(APP_NAME)-darwin-amd64 $(GEM_DIR)/exe/$(APP_NAME)-darwin-amd64
 	cd $(GEM_DIR) && GEM_VERSION=$(GEM_VERSION) PLATFORM=x86_64-darwin BINARY_NAME=$(APP_NAME)-darwin-amd64 gem build -o pkg/$(APP_NAME)-$(GEM_VERSION)-darwin-amd64.gem
 
 .PHONY: build-gem-darwin-arm64
-build-gem-darwin-arm64: build-binary-darwin-arm64
+build-gem-darwin-arm64:
 	mkdir -p $(GEM_DIR)/exe
 	cp $(BUILD_DIR)/$(APP_NAME)-darwin-arm64 $(GEM_DIR)/exe/$(APP_NAME)-darwin-arm64
 	cd $(GEM_DIR) && GEM_VERSION=$(GEM_VERSION) PLATFORM=arm64-darwin BINARY_NAME=$(APP_NAME)-darwin-arm64 gem build -o pkg/$(APP_NAME)-$(GEM_VERSION)-darwin-arm64.gem
@@ -106,19 +106,19 @@ publish-gems:
 	@echo "All gems published successfully."
 
 .PHONY: publish-gem-linux-amd64
-publish-gem-linux-amd64: build-gem-linux-amd64
+publish-gem-linux-amd64:
 	cd $(GEM_DIR)/pkg && gem push $(APP_NAME)-$(GEM_VERSION)-linux-amd64.gem
 
 .PHONY: publish-gem-linux-arm64
-publish-gem-linux-arm64: build-gem-linux-arm64
+publish-gem-linux-arm64:
 	cd $(GEM_DIR)/pkg && gem push $(APP_NAME)-$(GEM_VERSION)-linux-arm64.gem
 
 .PHONY: publish-gem-darwin-amd64
-publish-gem-darwin-amd64: build-gem-darwin-amd64
+publish-gem-darwin-amd64:
 	cd $(GEM_DIR)/pkg && gem push $(APP_NAME)-$(GEM_VERSION)-darwin-amd64.gem
 
 .PHONY: publish-gem-darwin-arm64
-publish-gem-darwin-arm64: build-gem-darwin-arm64
+publish-gem-darwin-arm64:
 	cd $(GEM_DIR)/pkg && gem push $(APP_NAME)-$(GEM_VERSION)-darwin-arm64.gem
 
 .PHONY: build-docker
