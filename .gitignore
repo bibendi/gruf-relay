@@ -26,4 +26,4 @@ go.work
 build/
 
 /gem/exe/gruf-relay*
-/gem/gruf-relay*.gem
+/gem/pkg/*.gem
