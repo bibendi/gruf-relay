@@ -22,47 +22,50 @@ build:
 		-o $(BUILD_DIR)/$(APP_NAME) \
 		./cmd/gruf-relay
 
+build-binary:
+	mkdir -p build
+	GOOS=$(BUILD_OS) GOARCH=$(BUILD_ARCH) go build \
+		-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)" \
+		-o build/$(APP_NAME)-$(BUILD_OS)-$(BUILD_ARCH) \
+		./cmd/gruf-relay
+
 .PHONY: run
 run:
 	cd example && ../build/gruf-relay
 
 .PHONY: build-gems
-build-gems: $(PLATFORMS:%=build-gem-%)
+build-gems: build-gem-linux-amd64 build-gem-linux-arm64 build-gem-darwin-amd64 build-gem-darwin-arm64
 
 .PHONY: build-gem-linux-amd64
-build-gem-linux-amd64:
+build-gem-linux-amd64: BUILD_OS = linux
+build-gem-linux-amd64: BUILD_ARCH = amd64
+build-gem-linux-amd64: build-binary
 	mkdir -p $(GEM_DIR)/exe
-	GOOS=linux GOARCH=amd64 go build \
-		-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)" \
-		-o $(GEM_DIR)/exe/$(APP_NAME)-linux-amd64 \
-		./cmd/gruf-relay
+	cp build/$(APP_NAME)-linux-amd64 $(GEM_DIR)/exe/$(APP_NAME)-linux-amd64
 	cd $(GEM_DIR) && GEM_VERSION=$(GEM_VERSION) PLATFORM=x86_64-linux BINARY_NAME=$(APP_NAME)-linux-amd64 gem build -o $(APP_NAME)-$(GEM_VERSION)-linux-amd64.gem
 
 .PHONY: build-gem-linux-arm64
-build-gem-linux-arm64:
+build-gem-linux-arm64: BUILD_OS = linux
+build-gem-linux-arm64: BUILD_ARCH = arm64
+build-gem-linux-arm64: build-binary
 	mkdir -p $(GEM_DIR)/exe
-	GOOS=linux GOARCH=arm64 go build \
-		-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)" \
-		-o $(GEM_DIR)/exe/$(APP_NAME)-linux-arm64 \
-		./cmd/gruf-relay
+	cp build/$(APP_NAME)-linux-arm64 $(GEM_DIR)/exe/$(APP_NAME)-linux-arm64
 	cd $(GEM_DIR) && GEM_VERSION=$(GEM_VERSION) PLATFORM=arm64-linux BINARY_NAME=$(APP_NAME)-linux-arm64 gem build -o $(APP_NAME)-$(GEM_VERSION)-linux-arm64.gem
 
 .PHONY: build-gem-darwin-amd64
-build-gem-darwin-amd64:
+build-gem-darwin-amd64: BUILD_OS = darwin
+build-gem-darwin-amd64: BUILD_ARCH = amd64
+build-gem-darwin-amd64: build-binary
 	mkdir -p $(GEM_DIR)/exe
-	GOOS=darwin GOARCH=amd64 go build \
-		-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)" \
-		-o $(GEM_DIR)/exe/$(APP_NAME)-darwin-amd64 \
-		./cmd/gruf-relay
+	cp build/$(APP_NAME)-darwin-amd64 $(GEM_DIR)/exe/$(APP_NAME)-darwin-amd64
 	cd $(GEM_DIR) && GEM_VERSION=$(GEM_VERSION) PLATFORM=x86_64-darwin BINARY_NAME=$(APP_NAME)-darwin-amd64 gem build -o $(APP_NAME)-$(GEM_VERSION)-darwin-amd64.gem
 
 .PHONY: build-gem-darwin-arm64
-build-gem-darwin-arm64:
+build-gem-darwin-arm64: BUILD_OS = darwin
+build-gem-darwin-arm64: BUILD_ARCH = arm64
+build-gem-darwin-arm64: build-binary
 	mkdir -p $(GEM_DIR)/exe
-	GOOS=darwin GOARCH=arm64 go build \
-		-ldflags "-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE)" \
-		-o $(GEM_DIR)/exe/$(APP_NAME)-darwin-arm64 \
-		./cmd/gruf-relay
+	cp build/$(APP_NAME)-darwin-arm64 $(GEM_DIR)/exe/$(APP_NAME)-darwin-arm64
 	cd $(GEM_DIR) && GEM_VERSION=$(GEM_VERSION) PLATFORM=arm64-darwin BINARY_NAME=$(APP_NAME)-darwin-arm64 gem build -o $(APP_NAME)-$(GEM_VERSION)-darwin-arm64.gem
 
 .PHONY: publish-gems
