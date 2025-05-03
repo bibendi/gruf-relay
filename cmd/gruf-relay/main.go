@@ -34,7 +34,7 @@ func main() {
 	flag.Parse()
 
 	if *printVersion {
-		fmt.Printf("gruf-relay\nversion: %s\ncommit: %s\nbuilt date: %s\n", version, commit, buildDate) // Update print format
+		fmt.Printf("gruf-relay\nversion: %s\ncommit: %s\nbuilt date: %s\n", version, commit, buildDate)
 		os.Exit(0)
 	}
 
