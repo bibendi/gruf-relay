@@ -6,11 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bibendi/gruf-relay/internal/config"
-	"github.com/bibendi/gruf-relay/internal/worker"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
+
+	"github.com/bibendi/gruf-relay/internal/config"
+	"github.com/bibendi/gruf-relay/internal/worker"
 )
 
 func TestManager(t *testing.T) {
@@ -79,6 +80,35 @@ var _ = Describe("Manager", func() {
 			manager.workers = map[string]worker.Worker{
 				"worker-1": worker1,
 				"worker-2": worker2,
+			}
+
+			err := manager.Run(ctx)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(Equal(expectedError))
+		})
+
+		It("returns an error if any workers fails to start", func() {
+			ctx := context.Background()
+			worker1 := worker.NewMockWorker(ctrl)
+			worker2 := worker.NewMockWorker(ctrl)
+			worker3 := worker.NewMockWorker(ctrl)
+
+			expectedError := errors.New("failed to start process")
+
+			worker1.EXPECT().Run(gomock.Any()).Return(expectedError)
+			worker1.EXPECT().String().Return("worker-1").AnyTimes()
+
+			worker2.EXPECT().Run(gomock.Any()).Return(nil).AnyTimes()
+			worker2.EXPECT().String().Return("worker-2").AnyTimes()
+
+			worker3.EXPECT().Run(gomock.Any()).Return(expectedError)
+			worker3.EXPECT().String().Return("worker-3").AnyTimes()
+
+			manager := NewManager(workersCfg)
+			manager.workers = map[string]worker.Worker{
+				"worker-1": worker1,
+				"worker-2": worker2,
+				"worker-3": worker3,
 			}
 
 			err := manager.Run(ctx)
