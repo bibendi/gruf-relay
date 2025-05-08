@@ -122,8 +122,11 @@ func main() {
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
+	exitCode := 0
 	select {
 	case <-ctx.Done():
+		log.Error("Shutdown initiated by context", slog.Any("error", ctx.Err()))
+		exitCode = 1
 	case sig := <-signalCh:
 		log.Info("Received termination signal, initiating graceful shutdown...", slog.Any("signal", sig))
 		cancel()
@@ -132,4 +135,5 @@ func main() {
 	wg.Wait()
 
 	log.Info("Goodbye!")
+	os.Exit(exitCode)
 }

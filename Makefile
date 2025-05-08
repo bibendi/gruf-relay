@@ -59,12 +59,8 @@ build-binary-darwin-arm64: BUILD_OS = darwin
 build-binary-darwin-arm64: BUILD_ARCH = arm64
 build-binary-darwin-arm64: build-binary
 
-.PHONY: run
-run:
-	cd example && ../$(BUILD_DIR)/gruf-relay
-
 .PHONY: build-gems
-build-gems:
+build-gems: build-binaries
 	@echo "Building gems for all platforms..."
 	$(MAKE) build-gem-linux-amd64
 	$(MAKE) build-gem-linux-arm64
@@ -126,12 +122,16 @@ build-docker: build-gems
 	@echo "Building Docker image for $(APP_NAME):$(VERSION)"
 	docker build \
 		-t $(APP_NAME):$(VERSION) \
-		-f example/kubernetes/Dockerfile .
+		-f example/Dockerfile .
+
+.PHONY: run
+run:
+	cd example && ../$(BUILD_DIR)/gruf-relay
 
 .PHONY: run-docker
 run-docker:
 	docker run -p 8080:8080 -p 9394:9394 -p 5555:5555 \
-		-it --rm \
+		--rm \
 		--name $(APP_NAME) $(APP_NAME):$(VERSION) $(cmd)
 
 .PHONY: k8s-apply-gruf-relay
@@ -173,3 +173,7 @@ clean:
 .PHONY: test
 test:
 	go test -v -cover -count=1 ./...
+
+.PHONY: test-e2e
+test-e2e:
+	go test -v -cover -count=1 ./e2e

@@ -1,68 +1,56 @@
-# syntax=docker/dockerfile:1
-# check=error=true
+FROM ruby:3.4-slim
 
-# This Dockerfile is designed for production, not development. Use with Kamal or build'n'run by hand:
-# docker build -t demo .
-# docker run -d -p 80:80 -e RAILS_MASTER_KEY=<value from config/master.key> --name demo demo
+ARG APP_PATH=/app
 
-# For a containerized dev environment, see Dev Containers: https://guides.rubyonrails.org/getting_started_with_devcontainer.html
-
-# Make sure RUBY_VERSION matches the Ruby version in .ruby-version
-ARG RUBY_VERSION=3.3.5
-FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
-
-# Rails app lives here
-WORKDIR /rails
-
-# Install base packages
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y curl libjemalloc2 sqlite3 && \
-    rm -rf /var/lib/apt/lists /var/cache/apt/archives
-
-# Set production environment
-ENV RAILS_ENV="production" \
+ENV LANG=C.UTF-8 \
+    PATH="${APP_PATH}/bin:${PATH}" \
+    RAILS_ENV="production" \
     BUNDLE_DEPLOYMENT="1" \
     BUNDLE_PATH="/usr/local/bundle" \
-    BUNDLE_WITHOUT="development"
-
-# Throw-away build stage to reduce size of final image
-FROM base AS build
+    BUNDLE_WITHOUT="development test"
 
 # Install packages needed to build gems
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential git pkg-config && \
+    apt-get install --no-install-recommends -y \
+    build-essential \
+    git \
+    pkg-config \
+    libyaml-dev \
+    curl \
+    libjemalloc2 && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
+WORKDIR ${APP_PATH}
+
+# Copy gruf-relay gem
+COPY ./gem /gem
+
 # Install application gems
-COPY Gemfile Gemfile.lock ./
+COPY ./example/Gemfile ./example/Gemfile.lock ./
 RUN bundle install && \
     rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git
 
-# Copy application code
-COPY . .
+ARG GIT_TAG=0.0.0-dev
+ARG BUILD=HEAD
+ENV GIT_TAG=$GIT_TAG
+ENV BUILD=$BUILD
 
-# Precompiling assets for production without requiring secret RAILS_MASTER_KEY
-RUN SECRET_KEY_BASE_example=1 ./bin/rails assets:precompile
+RUN if [ "$(uname -m)" = "x86_64" ]; then \
+    echo "Setting LD_PRELOAD for x86_64 architecture"; \
+    echo "LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2" >> /etc/environment; \
+  elif [ "$(uname -m)" = "aarch64" ]; then \
+    echo "Setting LD_PRELOAD for aarch64 architecture (if jemalloc is needed)"; \
+    if [ -f /usr/lib/aarch64-linux-gnu/libjemalloc.so.2 ]; then \
+        echo "LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libjemalloc.so.2" >> /etc/environment; \
+    else \
+        echo "jemalloc not found for aarch64, skipping LD_PRELOAD"; \
+    fi; \
+  else \
+    echo "Unknown architecture: $(uname -m), skipping LD_PRELOAD"; \
+  fi
 
+COPY ./example ${APP_PATH}
 
+EXPOSE 8080
 
-
-# Final stage for app image
-FROM base
-
-# Copy built artifacts: gems, application
-COPY --from=build "${BUNDLE_PATH}" "${BUNDLE_PATH}"
-COPY --from=build /rails /rails
-
-# Run and own only the runtime files as a non-root user for security
-RUN groupadd --system --gid 1000 rails && \
-    useradd rails --uid 1000 --gid 1000 --create-home --shell /bin/bash && \
-    chown -R rails:rails db log storage tmp
-USER 1000:1000
-
-# Entrypoint prepares the database.
-ENTRYPOINT ["/rails/bin/docker-entrypoint"]
-
-# Start server via Thruster by default, this can be overwritten at runtime
-EXPOSE 80
-CMD ["./bin/thrust", "./bin/rails", "server"]
+CMD ["bundle", "exec", "gruf-relay"]
