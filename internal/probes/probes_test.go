@@ -81,7 +81,7 @@ var _ = Describe("Probes", func() {
 
 		It("responds on /startup request", func() {
 			go pb.Serve(ctx)
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 
 			// Test success case when app is started
 			resp, err := http.Get("http://localhost:6014/startup")
@@ -99,7 +99,7 @@ var _ = Describe("Probes", func() {
 
 		It("responds on /readiness request", func() {
 			go pb.Serve(ctx)
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 
 			hc.EXPECT().GetServerState("worker-a").Return(connectivity.Ready)
 			resp, err := http.Get("http://localhost:6014/readiness")
@@ -122,7 +122,7 @@ var _ = Describe("Probes", func() {
 
 		It("responds on /liveness request", func() {
 			go pb.Serve(ctx)
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 
 			okStates := []connectivity.State{
 				connectivity.Ready,
