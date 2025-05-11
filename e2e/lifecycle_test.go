@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
@@ -84,7 +85,9 @@ func TestLifecycle(t *testing.T) {
 		t.Fatalf("readiness probe failed: %v", err)
 	}
 
-	conn, err := grpc.Dial(grpcAddr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(5*time.Second))
+	conn, err := grpc.NewClient(
+		grpcAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		_ = cmd.Process.Kill()
 		t.Fatalf("failed to connect to gRPC server: %v", err)
