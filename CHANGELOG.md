@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+## [0.1.2] - 2025-05-11
+
+### Fixed
+
+- Fixed panic in manager if any workers failed to run in https://github.com/bibendi/gruf-relay/pull/2
+
 ## [0.1.1] - 2025-05-01
 
 ### Fixed
