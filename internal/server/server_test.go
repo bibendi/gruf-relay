@@ -31,7 +31,7 @@ var _ = Describe("Server", func() {
 		mockProxy = NewMockProxy(ctrl)
 		cfg = config.Server{
 			Host: "localhost",
-			Port: 6014,
+			Port: 6024,
 		}
 		server = NewServer(cfg, mockProxy)
 		ctx, cancel = context.WithCancel(context.Background())
