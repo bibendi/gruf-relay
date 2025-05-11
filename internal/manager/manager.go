@@ -32,7 +32,6 @@ func NewManager(cfg config.Workers) *Manager {
 
 func (m *Manager) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
-	defer wg.Wait()
 
 	log.Info("Starting manager", slog.Int("workers_count", len(m.workers)))
 	errChan := make(chan error, 1)
@@ -61,6 +60,7 @@ func (m *Manager) Run(ctx context.Context) error {
 	}
 
 	cancel()
+	wg.Wait()
 	return err
 }
 
