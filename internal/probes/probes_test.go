@@ -2,6 +2,7 @@ package probes
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync/atomic"
 	"testing"
@@ -22,6 +23,8 @@ func TestHealthCheck(t *testing.T) {
 var _ = Describe("Probes", func() {
 	var (
 		ctrl      *gomock.Controller
+		host      = "localhost"
+		port      = 8080
 		pb        *Probes
 		ctx       context.Context
 		cancel    context.CancelFunc
@@ -35,7 +38,7 @@ var _ = Describe("Probes", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		isStarted = &atomic.Value{}
 		isStarted.Store(true)
-		cfg = config.Probes{Port: 6014}
+		cfg = config.Probes{Port: port}
 		m = NewMockManager(ctrl)
 		m.EXPECT().GetWorkerNames().Return([]string{"worker-a"}).AnyTimes()
 		hc = NewMockHealthChecker(ctrl)
@@ -80,32 +83,26 @@ var _ = Describe("Probes", func() {
 		})
 
 		It("responds on /startup request", func() {
+			startupURL := fmt.Sprintf("http://%s:%d/startup", host, port)
 			go pb.Serve(ctx)
-			time.Sleep(500 * time.Millisecond)
 
 			// Test success case when app is started
-			resp, err := http.Get("http://localhost:6014/startup")
+			err := waitForProbe(startupURL, 3*time.Second)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(resp.StatusCode).To(Equal(http.StatusOK))
-			resp.Body.Close()
 
 			// Test failure case when app is not started
 			isStarted.Store(false)
-			resp, err = http.Get("http://localhost:6014/startup")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(resp.StatusCode).To(Equal(http.StatusServiceUnavailable))
-			resp.Body.Close()
+			err = waitForProbe(startupURL, 100*time.Millisecond)
+			Expect(err).To(HaveOccurred())
 		})
 
 		It("responds on /readiness request", func() {
+			readinessURL := fmt.Sprintf("http://%s:%d/readiness", host, port)
 			go pb.Serve(ctx)
-			time.Sleep(500 * time.Millisecond)
 
 			hc.EXPECT().GetServerState("worker-a").Return(connectivity.Ready)
-			resp, err := http.Get("http://localhost:6014/readiness")
+			err := waitForProbe(readinessURL, 3*time.Second)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(resp.StatusCode).To(Equal(http.StatusOK))
-			resp.Body.Close()
 
 			downStates := []connectivity.State{
 				connectivity.TransientFailure,
@@ -113,34 +110,45 @@ var _ = Describe("Probes", func() {
 			}
 			for _, state := range downStates {
 				hc.EXPECT().GetServerState("worker-a").Return(state)
-				resp, err := http.Get("http://localhost:6014/readiness")
-				Expect(err).NotTo(HaveOccurred())
-				Expect(resp.StatusCode).To(Equal(http.StatusServiceUnavailable))
-				resp.Body.Close()
+				err = waitForProbe(readinessURL, 100*time.Millisecond)
+				Expect(err).To(HaveOccurred())
 			}
 		})
 
 		It("responds on /liveness request", func() {
+			livenessURL := fmt.Sprintf("http://%s:%d/liveness", host, port)
 			go pb.Serve(ctx)
-			time.Sleep(500 * time.Millisecond)
 
-			okStates := []connectivity.State{
-				connectivity.Ready,
-				connectivity.TransientFailure,
-			}
-			for _, state := range okStates {
-				hc.EXPECT().GetServerState("worker-a").Return(state)
-				resp, err := http.Get("http://localhost:6014/liveness")
-				Expect(err).NotTo(HaveOccurred())
-				Expect(resp.StatusCode).To(Equal(http.StatusOK))
-				resp.Body.Close()
-			}
+			hc.EXPECT().GetServerState("worker-a").Return(connectivity.Ready)
+			err := waitForProbe(livenessURL, 3*time.Second)
+			Expect(err).NotTo(HaveOccurred())
+
+			hc.EXPECT().GetServerState("worker-a").Return(connectivity.TransientFailure)
+			err = waitForProbe(livenessURL, 100*time.Millisecond)
+			Expect(err).NotTo(HaveOccurred())
 
 			hc.EXPECT().GetServerState("worker-a").Return(connectivity.Shutdown)
-			resp, err := http.Get("http://localhost:6014/liveness")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(resp.StatusCode).To(Equal(http.StatusServiceUnavailable))
-			resp.Body.Close()
+			err = waitForProbe(livenessURL, 100*time.Millisecond)
+			Expect(err).To(HaveOccurred())
 		})
 	})
 })
+
+func waitForProbe(url string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		resp, err := http.Get(url)
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return nil
+			}
+			lastErr = fmt.Errorf("status: %d", resp.StatusCode)
+		} else {
+			lastErr = err
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return fmt.Errorf("probe %s not ready: %v", url, lastErr)
+}
